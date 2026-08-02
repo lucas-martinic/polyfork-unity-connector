@@ -1,0 +1,22 @@
+{
+    "name": "Polyfork.Connector.Editor",
+    "rootNamespace": "Polyfork.EditorTools",
+    "references": [
+        "Polyfork.Connector",
+        "glTFast",
+        "glTFast.Editor",
+        "glTFast.Export",
+        "Unity.Nuget.Newtonsoft-Json"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

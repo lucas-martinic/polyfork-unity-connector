@@ -1,0 +1,631 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using UnityEditor;
+using UnityEngine;
+
+namespace Polyfork.EditorTools
+{
+    /// <summary>
+    /// The Polyfork store, inside Unity: browse the catalogue, turn the same knobs the web
+    /// viewer exposes, and drop the result into the project as a .glb.
+    ///
+    /// Knob metadata is Polyfork's own (/cdn/{id}-params.json); nothing here is invented.
+    /// </summary>
+    public sealed class PolyforkGalleryWindow : EditorWindow
+    {
+        const float DetailWidth = 340f;
+        const float CardSize = 118f;
+        const float CardPadding = 8f;
+
+        [MenuItem("Window/Polyfork/Browse Assets %#p", priority = 1100)]
+        public static void Open()
+        {
+            var window = GetWindow<PolyforkGalleryWindow>();
+            window.titleContent = new GUIContent("Polyfork");
+            window.minSize = new Vector2(720f, 420f);
+            window.Show();
+        }
+
+        // ---- services -------------------------------------------------------
+        PolyforkClient _client;
+        PolyforkGlbLoader _loader;
+        PolyforkThumbnailCache _thumbs;
+        PolyforkAssetPreview _preview;
+        CancellationTokenSource _cts;
+
+        // ---- catalogue ------------------------------------------------------
+        readonly List<PolyforkAsset> _all = new();
+        List<PolyforkAsset> _filtered = new();
+        string _status = "Connecting…";
+        bool _loading;
+
+        // ---- filters --------------------------------------------------------
+        string _search = "";
+        string _kit = "All kits";
+        string _class = "All types";
+        bool _freeOnly;
+        bool _remixableOnly;
+        int _maxTriangles;
+        string[] _kits = { "All kits" };
+        string[] _classes = { "All types" };
+
+        // ---- selection ------------------------------------------------------
+        PolyforkAsset _selected;
+        PolyforkParams _schema;
+        readonly Dictionary<string, float> _ranges = new();
+        readonly Dictionary<string, Color> _slotColors = new();
+        string _colorway;
+        string _colorwayKnob;
+
+        bool _previewDirty;
+        double _rebuildAt;
+        bool _rebuilding;
+        string _importMessage;
+        MessageType _importMessageType = MessageType.Info;
+        string _importFolder = PolyforkAssetImporter.DefaultFolder;
+
+        Vector2 _gridScroll;
+        Vector2 _detailScroll;
+
+        void OnEnable()
+        {
+            _cts = new CancellationTokenSource();
+            _client = new PolyforkClient { ApiKey = PolyforkCredentials.Resolve(null) };
+            _loader = new PolyforkGlbLoader(_client);
+            _thumbs = new PolyforkThumbnailCache(_client);
+            _thumbs.Changed += Repaint;
+            _preview = new PolyforkAssetPreview();
+
+            EditorApplication.update += OnEditorUpdate;
+            _ = LoadCatalogueAsync();
+        }
+
+        void OnDisable()
+        {
+            EditorApplication.update -= OnEditorUpdate;
+            _cts?.Cancel();
+            _cts?.Dispose();
+            _thumbs?.Dispose();
+            _preview?.Dispose();
+        }
+
+        void OnEditorUpdate()
+        {
+            if (_previewDirty && !_rebuilding && EditorApplication.timeSinceStartup >= _rebuildAt)
+            {
+                _previewDirty = false;
+                _ = RebuildPreviewAsync();
+            }
+        }
+
+        // =====================================================================
+        // Catalogue
+        // =====================================================================
+
+        async Task LoadCatalogueAsync()
+        {
+            _loading = true;
+            _status = "Loading catalogue…";
+            Repaint();
+
+            try
+            {
+                var assets = await _client.GetAllAssetsAsync(null, _cts.Token);
+                _all.Clear();
+                _all.AddRange(assets);
+
+                _kits = new[] { "All kits" }
+                    .Concat(assets.Select(a => a.Kit).Where(k => !string.IsNullOrEmpty(k)).Distinct().OrderBy(k => k))
+                    .ToArray();
+                _classes = new[] { "All types" }
+                    .Concat(assets.Select(a => a.Class).Where(c => !string.IsNullOrEmpty(c)).Distinct().OrderBy(c => c))
+                    .ToArray();
+
+                ApplyFilter();
+                _status = $"{_all.Count} assets";
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception e)
+            {
+                _status = $"Could not reach polyfork.dev: {e.Message}";
+            }
+            finally
+            {
+                _loading = false;
+                Repaint();
+            }
+        }
+
+        void ApplyFilter()
+        {
+            IEnumerable<PolyforkAsset> q = _all;
+
+            if (!string.IsNullOrWhiteSpace(_search))
+            {
+                var needle = _search.Trim();
+                q = q.Where(a =>
+                    (a.Title != null && a.Title.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0) ||
+                    (a.Id != null && a.Id.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0) ||
+                    (a.Kit != null && a.Kit.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0));
+            }
+
+            if (_kit != "All kits") q = q.Where(a => a.Kit == _kit);
+            if (_class != "All types") q = q.Where(a => a.Class == _class);
+            if (_freeOnly) q = q.Where(a => a.Free);
+            if (_remixableOnly) q = q.Where(a => a.Remixable);
+            if (_maxTriangles > 0) q = q.Where(a => a.Triangles <= _maxTriangles);
+
+            _filtered = q.ToList();
+        }
+
+        // =====================================================================
+        // Selection
+        // =====================================================================
+
+        async void Select(PolyforkAsset asset)
+        {
+            if (asset == null || _selected == asset) return;
+
+            _selected = asset;
+            _schema = null;
+            _ranges.Clear();
+            _slotColors.Clear();
+            _colorway = null;
+            _colorwayKnob = null;
+            _importMessage = null;
+            _preview.Clear();
+            Repaint();
+
+            try
+            {
+                if (asset.Remixable)
+                {
+                    _schema = await _client.GetParamsAsync(asset.Id, _cts.Token);
+                    if (_selected != asset) return;
+                    ResetKnobs();
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Polyfork] no knob schema for {asset.Id}: {e.Message}");
+            }
+
+            QueuePreviewRebuild(immediate: true);
+        }
+
+        void ResetKnobs()
+        {
+            _ranges.Clear();
+            _slotColors.Clear();
+            _colorway = null;
+            _colorwayKnob = null;
+            if (_schema == null) return;
+
+            foreach (var knob in _schema.All)
+            {
+                switch (knob.Support)
+                {
+                    case PolyforkKnobSupport.ServerRebuild:
+                        _ranges[knob.Name] = knob.DefaultFloat;
+                        break;
+                    case PolyforkKnobSupport.LocalRecolor when knob.Type == PolyforkKnobType.Color:
+                        if (PolyforkParams.TryParseHex(knob.DefaultString, out var c)) _slotColors[knob.Name] = c;
+                        break;
+                    case PolyforkKnobSupport.LocalRecolor when knob.Type == PolyforkKnobType.Choice:
+                        _colorwayKnob ??= knob.Name;
+                        _colorway ??= knob.DefaultString;
+                        break;
+                }
+            }
+        }
+
+        void QueuePreviewRebuild(bool immediate = false)
+        {
+            _previewDirty = true;
+            _rebuildAt = EditorApplication.timeSinceStartup + (immediate ? 0d : 0.25d);
+        }
+
+        async Task RebuildPreviewAsync()
+        {
+            if (_selected == null) return;
+
+            _rebuilding = true;
+            var asset = _selected;
+
+            try
+            {
+                var payload = new Dictionary<string, float>();
+                if (_schema != null)
+                {
+                    foreach (var kv in _ranges)
+                    {
+                        if (_schema.Knobs.TryGetValue(kv.Key, out var knob) &&
+                            !Mathf.Approximately(kv.Value, knob.DefaultFloat)) payload[kv.Key] = kv.Value;
+                    }
+                }
+
+                var url = payload.Count == 0 ? asset.PreviewGlb : _client.RemixGlbUrl(asset.Id, payload);
+                if (string.IsNullOrEmpty(url)) return;
+
+                var bytes = await _loader.GetBytesAsync(url, _cts.Token);
+                if (_selected != asset) return;
+
+                var go = await _loader.InstantiateAsync(bytes, url, null, _cts.Token);
+                if (_selected != asset)
+                {
+                    DestroyImmediate(go);
+                    return;
+                }
+
+                // Colours are applied locally: the remix endpoint does not bake them.
+                if (_schema != null && _slotColors.Count > 0)
+                {
+                    var slots = PolyforkColorSlots.Build(go, _schema);
+                    slots.Apply(_slotColors);
+                }
+
+                _preview.SetTarget(go);
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Polyfork] preview failed for {asset.Id}: {e.Message}");
+            }
+            finally
+            {
+                _rebuilding = false;
+                Repaint();
+            }
+        }
+
+        // =====================================================================
+        // GUI
+        // =====================================================================
+
+        void OnGUI()
+        {
+            DrawToolbar();
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                DrawGrid();
+                DrawDetail();
+            }
+
+            DrawStatusBar();
+        }
+
+        void DrawToolbar()
+        {
+            using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
+            {
+                EditorGUI.BeginChangeCheck();
+
+                _search = GUILayout.TextField(_search, EditorStyles.toolbarSearchField, GUILayout.Width(180f));
+
+                var kitIndex = Mathf.Max(0, Array.IndexOf(_kits, _kit));
+                kitIndex = EditorGUILayout.Popup(kitIndex, _kits, EditorStyles.toolbarPopup, GUILayout.Width(150f));
+                _kit = _kits[Mathf.Clamp(kitIndex, 0, _kits.Length - 1)];
+
+                var classIndex = Mathf.Max(0, Array.IndexOf(_classes, _class));
+                classIndex = EditorGUILayout.Popup(classIndex, _classes, EditorStyles.toolbarPopup, GUILayout.Width(110f));
+                _class = _classes[Mathf.Clamp(classIndex, 0, _classes.Length - 1)];
+
+                _freeOnly = GUILayout.Toggle(_freeOnly, "Free only", EditorStyles.toolbarButton, GUILayout.Width(70f));
+                _remixableOnly = GUILayout.Toggle(_remixableOnly, "Remixable", EditorStyles.toolbarButton, GUILayout.Width(80f));
+
+                GUILayout.Label("Max tris", EditorStyles.miniLabel, GUILayout.Width(52f));
+                _maxTriangles = EditorGUILayout.IntPopup(
+                    _maxTriangles,
+                    new[] { "Any", "500", "1000", "2000", "5000" },
+                    new[] { 0, 500, 1000, 2000, 5000 },
+                    EditorStyles.toolbarPopup, GUILayout.Width(60f));
+
+                if (EditorGUI.EndChangeCheck()) ApplyFilter();
+
+                GUILayout.FlexibleSpace();
+
+                using (new EditorGUI.DisabledScope(_loading))
+                {
+                    if (GUILayout.Button("Refresh", EditorStyles.toolbarButton, GUILayout.Width(60f)))
+                        _ = LoadCatalogueAsync();
+                }
+            }
+        }
+
+        void DrawGrid()
+        {
+            using var scope = new EditorGUILayout.VerticalScope();
+            _gridScroll = EditorGUILayout.BeginScrollView(_gridScroll);
+
+            if (_filtered.Count == 0)
+            {
+                EditorGUILayout.HelpBox(_loading ? "Loading…" : "No assets match these filters.", MessageType.Info);
+            }
+            else
+            {
+                var available = Mathf.Max(CardSize, position.width - DetailWidth - 28f);
+                var columns = Mathf.Max(1, Mathf.FloorToInt(available / (CardSize + CardPadding)));
+
+                for (var i = 0; i < _filtered.Count; i += columns)
+                {
+                    using (new EditorGUILayout.HorizontalScope())
+                    {
+                        for (var c = 0; c < columns && i + c < _filtered.Count; c++)
+                            DrawCard(_filtered[i + c]);
+                        GUILayout.FlexibleSpace();
+                    }
+                }
+            }
+
+            EditorGUILayout.EndScrollView();
+        }
+
+        void DrawCard(PolyforkAsset asset)
+        {
+            var rect = GUILayoutUtility.GetRect(CardSize, CardSize + 26f, GUILayout.Width(CardSize),
+                GUILayout.Height(CardSize + 26f));
+
+            var selected = _selected == asset;
+            if (Event.current.type == EventType.Repaint)
+            {
+                var bg = selected
+                    ? new Color(0.24f, 0.42f, 0.72f, 0.55f)
+                    : new Color(0f, 0f, 0f, 0.16f);
+                EditorGUI.DrawRect(rect, bg);
+            }
+
+            var imageRect = new Rect(rect.x + 3f, rect.y + 3f, rect.width - 6f, rect.width - 6f);
+            var tex = _thumbs.Get(asset.Thumbnail);
+            if (tex != null) GUI.DrawTexture(imageRect, tex, ScaleMode.ScaleToFit);
+            else EditorGUI.DrawRect(imageRect, new Color(1f, 1f, 1f, 0.04f));
+
+            var labelRect = new Rect(rect.x + 4f, rect.yMax - 24f, rect.width - 8f, 14f);
+            GUI.Label(labelRect, asset.Title ?? asset.Id, EditorStyles.miniLabel);
+
+            var metaRect = new Rect(rect.x + 4f, rect.yMax - 12f, rect.width - 8f, 12f);
+            var badge = asset.Free ? "free" : "pro";
+            if (asset.Remixable) badge += " · remix";
+            GUI.Label(metaRect, $"{asset.Triangles} tri · {badge}", EditorStyles.miniLabel);
+
+            if (Event.current.type == EventType.MouseDown && rect.Contains(Event.current.mousePosition))
+            {
+                Select(asset);
+                Event.current.Use();
+            }
+        }
+
+        void DrawDetail()
+        {
+            using var scope = new EditorGUILayout.VerticalScope(GUILayout.Width(DetailWidth));
+
+            if (_selected == null)
+            {
+                EditorGUILayout.HelpBox("Select an asset to remix it.", MessageType.None);
+                return;
+            }
+
+            _detailScroll = EditorGUILayout.BeginScrollView(_detailScroll);
+
+            EditorGUILayout.LabelField(_selected.Title ?? _selected.Id, EditorStyles.boldLabel);
+            EditorGUILayout.LabelField(
+                $"{_selected.Triangles} tri · {_selected.Class} · {(_selected.Free ? "free" : $"${_selected.PriceUsdOrZero()}")}",
+                EditorStyles.miniLabel);
+
+            var previewRect = GUILayoutUtility.GetRect(DetailWidth - 12f, 200f);
+            _preview.Draw(previewRect, _rebuilding);
+
+            EditorGUILayout.Space(4f);
+            DrawKnobs();
+
+            EditorGUILayout.Space(8f);
+            DrawImportSection();
+
+            EditorGUILayout.EndScrollView();
+        }
+
+        void DrawKnobs()
+        {
+            if (_schema == null)
+            {
+                EditorGUILayout.HelpBox(
+                    _selected.Remixable ? "Loading knobs…" : "This asset has no remix knobs.",
+                    MessageType.None);
+                return;
+            }
+
+            var knobs = _schema.Remixable.ToList();
+            if (knobs.Count == 0)
+            {
+                EditorGUILayout.HelpBox("No knobs on this asset can be applied here.", MessageType.None);
+                return;
+            }
+
+            EditorGUILayout.LabelField("Remix", EditorStyles.boldLabel);
+
+            foreach (var knob in knobs)
+            {
+                switch (knob.Type)
+                {
+                    case PolyforkKnobType.Choice: DrawColorwayKnob(knob); break;
+                    case PolyforkKnobType.Color: DrawColorKnob(knob); break;
+                    case PolyforkKnobType.Range: DrawRangeKnob(knob); break;
+                }
+            }
+
+            var hidden = _schema.All.Count(k => !k.IsSupported);
+            if (hidden > 0)
+            {
+                EditorGUILayout.Space(2f);
+                EditorGUILayout.LabelField(
+                    $"{hidden} structural knob{(hidden == 1 ? "" : "s")} hidden — the remix endpoint does not bake them.",
+                    EditorStyles.miniLabel);
+            }
+
+            EditorGUILayout.Space(4f);
+            if (GUILayout.Button("Reset to defaults"))
+            {
+                ResetKnobs();
+                QueuePreviewRebuild(immediate: true);
+            }
+        }
+
+        void DrawColorwayKnob(PolyforkKnob knob)
+        {
+            EditorGUILayout.LabelField(knob.Label, EditorStyles.miniBoldLabel);
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                foreach (var option in knob.Options)
+                {
+                    if (!_schema.TryGetPreset(option, out var slots)) continue;
+
+                    var swatch = Color.gray;
+                    foreach (var kv in slots)
+                    {
+                        if (PolyforkParams.TryParseHex(kv.Value, out var c)) { swatch = c; break; }
+                    }
+
+                    var rect = GUILayoutUtility.GetRect(26f, 20f, GUILayout.Width(26f));
+                    EditorGUI.DrawRect(rect, swatch);
+
+                    if (_colorway == option)
+                        EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - 2f, rect.width, 2f), new Color(0.35f, 0.62f, 1f));
+
+                    if (Event.current.type == EventType.MouseDown && rect.Contains(Event.current.mousePosition))
+                    {
+                        ApplyColorway(knob.Name, option);
+                        Event.current.Use();
+                    }
+                }
+                GUILayout.FlexibleSpace();
+            }
+        }
+
+        void ApplyColorway(string knobName, string preset)
+        {
+            if (!_schema.TryGetPreset(preset, out var slots)) return;
+
+            foreach (var kv in slots)
+            {
+                if (PolyforkParams.TryParseHex(kv.Value, out var c)) _slotColors[kv.Key] = c;
+            }
+            _colorway = preset;
+            _colorwayKnob = knobName;
+            QueuePreviewRebuild(immediate: true);
+        }
+
+        void DrawColorKnob(PolyforkKnob knob)
+        {
+            _slotColors.TryGetValue(knob.Name, out var current);
+
+            EditorGUI.BeginChangeCheck();
+            var next = EditorGUILayout.ColorField(
+                new GUIContent(knob.Label, knob.Describe), current, showEyedropper: true, showAlpha: false, hdr: false);
+
+            if (!EditorGUI.EndChangeCheck()) return;
+
+            _slotColors[knob.Name] = next;
+            _colorway = null;                    // no longer a curated colourway
+            QueuePreviewRebuild(immediate: true);
+        }
+
+        void DrawRangeKnob(PolyforkKnob knob)
+        {
+            _ranges.TryGetValue(knob.Name, out var current);
+
+            EditorGUI.BeginChangeCheck();
+            float next;
+
+            if (knob.IsIntegral)
+            {
+                next = EditorGUILayout.IntSlider(
+                    new GUIContent(knob.Label, knob.Describe),
+                    Mathf.RoundToInt(current), Mathf.RoundToInt(knob.Min), Mathf.RoundToInt(knob.Max));
+            }
+            else
+            {
+                next = EditorGUILayout.Slider(
+                    new GUIContent(knob.Label, knob.Describe), current, knob.Min, knob.Max);
+            }
+
+            if (!EditorGUI.EndChangeCheck()) return;
+
+            _ranges[knob.Name] = next;
+            QueuePreviewRebuild();               // debounced: geometry needs a round trip
+        }
+
+        void DrawImportSection()
+        {
+            EditorGUILayout.LabelField("Import", EditorStyles.boldLabel);
+            _importFolder = EditorGUILayout.TextField("Folder", _importFolder);
+
+            using (new EditorGUI.DisabledScope(_rebuilding))
+            {
+                if (GUILayout.Button("Import GLB to project", GUILayout.Height(24f)))
+                    _ = ImportAsync();
+            }
+
+            if (GUILayout.Button("Open on polyfork.dev", EditorStyles.miniButton))
+                Application.OpenURL(_selected.Page ?? "https://polyfork.dev");
+
+            if (!string.IsNullOrEmpty(_importMessage))
+                EditorGUILayout.HelpBox(_importMessage, _importMessageType);
+        }
+
+        async Task ImportAsync()
+        {
+            var asset = _selected;
+            _importMessage = "Importing…";
+            _importMessageType = MessageType.Info;
+            Repaint();
+
+            var result = await PolyforkAssetImporter.ImportAsync(
+                _client, _loader, asset, _schema, _ranges, _slotColors, _importFolder, _cts.Token);
+
+            if (result.Success)
+            {
+                _importMessage = result.ColorsBaked
+                    ? $"Imported to {result.AssetPath} with your colours baked in."
+                    : $"Imported to {result.AssetPath}.";
+                _importMessageType = MessageType.Info;
+
+                var obj = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(result.AssetPath);
+                if (obj != null) EditorGUIUtility.PingObject(obj);
+            }
+            else
+            {
+                _importMessage = $"Import failed: {result.Error}";
+                _importMessageType = MessageType.Error;
+            }
+
+            Repaint();
+        }
+
+        void DrawStatusBar()
+        {
+            using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
+            {
+                GUILayout.Label(_loading ? "Loading…" : $"{_filtered.Count} of {_all.Count} shown", EditorStyles.miniLabel);
+                GUILayout.FlexibleSpace();
+                GUILayout.Label(_status, EditorStyles.miniLabel);
+            }
+        }
+    }
+
+    internal static class PolyforkAssetExtensions
+    {
+        public static string PriceUsdOrZero(this PolyforkAsset asset) => asset.Free ? "0" : "1-3";
+    }
+}
