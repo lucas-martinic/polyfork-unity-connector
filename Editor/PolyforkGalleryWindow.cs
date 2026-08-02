@@ -65,6 +65,8 @@ namespace Polyfork.EditorTools
         string _colorway;
         string _colorwayKnob;
 
+        readonly PolyforkRemixHistory _history = new();
+
         bool _previewDirty;
         double _rebuildAt;
         bool _rebuilding;
@@ -217,6 +219,7 @@ namespace Polyfork.EditorTools
             _selected = asset;
             _schema = null;
             _previewedAssetId = null;      // a new asset should be framed, not inherit zoom
+            _history.Clear();              // undo is per-asset; don't step back into another
             _ranges.Clear();
             _slotColors.Clear();
             _colorway = null;
@@ -343,8 +346,87 @@ namespace Polyfork.EditorTools
         // GUI
         // =====================================================================
 
+        // =====================================================================
+        // Undo / redo
+        // =====================================================================
+
+        PolyforkRemixSnapshot Snapshot() => new()
+        {
+            Ranges = new Dictionary<string, float>(_ranges),
+            SlotColors = new Dictionary<string, Color>(_slotColors),
+            Colorway = _colorway
+        };
+
+        /// <summary>Call immediately before mutating knob state.</summary>
+        void RecordUndo(string opKey) => _history.Record(Snapshot(), opKey);
+
+        void RestoreSnapshot(PolyforkRemixSnapshot state)
+        {
+            if (state == null) return;
+
+            var geometryChanged = state.GeometryDiffers(Snapshot());
+
+            _ranges.Clear();
+            foreach (var kv in state.Ranges) _ranges[kv.Key] = kv.Value;
+
+            _slotColors.Clear();
+            foreach (var kv in state.SlotColors) _slotColors[kv.Key] = kv.Value;
+
+            _colorway = state.Colorway;
+
+            // Only pay for a rebuild when the mesh actually differs; a colour-only undo is
+            // applied in place and stays instant.
+            if (geometryChanged) QueuePreviewRebuild(immediate: true);
+            else ApplyColorsToPreview();
+
+            Repaint();
+        }
+
+        void PerformUndo()
+        {
+            var restored = _history.Undo(Snapshot());
+            if (restored != null) RestoreSnapshot(restored);
+        }
+
+        void PerformRedo()
+        {
+            var restored = _history.Redo(Snapshot());
+            if (restored != null) RestoreSnapshot(restored);
+        }
+
+        /// <summary>
+        /// Claims the editor's Undo/Redo commands while this window has focus, so Ctrl+Z
+        /// here edits the remix rather than the user's scene.
+        /// </summary>
+        void HandleUndoCommands()
+        {
+            var e = Event.current;
+            if (e.type != EventType.ValidateCommand && e.type != EventType.ExecuteCommand) return;
+
+            var isUndo = e.commandName == "Undo";
+            var isRedo = e.commandName == "Redo";
+            if (!isUndo && !isRedo) return;
+
+            // Only claim it when there is something of ours to undo; otherwise let the
+            // command fall through to Unity so global undo still works from this window.
+            if (isUndo && !_history.CanUndo) return;
+            if (isRedo && !_history.CanRedo) return;
+
+            if (e.type == EventType.ValidateCommand)
+            {
+                e.Use();
+                return;
+            }
+
+            if (isUndo) PerformUndo();
+            else PerformRedo();
+            e.Use();
+        }
+
         void OnGUI()
         {
+            HandleUndoCommands();
+
             DrawToolbar();
             DrawRateLimitBanner();
 
@@ -549,10 +631,28 @@ namespace Polyfork.EditorTools
             }
 
             EditorGUILayout.Space(4f);
-            if (GUILayout.Button("Reset to defaults"))
+
+            using (new EditorGUILayout.HorizontalScope())
             {
-                ResetKnobs();
-                QueuePreviewRebuild(immediate: true);
+                using (new EditorGUI.DisabledScope(!_history.CanUndo))
+                {
+                    if (GUILayout.Button(new GUIContent("Undo", "Ctrl/Cmd + Z"), GUILayout.Width(60f)))
+                        PerformUndo();
+                }
+
+                using (new EditorGUI.DisabledScope(!_history.CanRedo))
+                {
+                    if (GUILayout.Button(new GUIContent("Redo", "Ctrl/Cmd + Y, or Ctrl/Cmd + Shift + Z"),
+                            GUILayout.Width(60f)))
+                        PerformRedo();
+                }
+
+                if (GUILayout.Button("Reset to defaults"))
+                {
+                    RecordUndo("reset");
+                    ResetKnobs();
+                    QueuePreviewRebuild(immediate: true);
+                }
             }
         }
 
@@ -592,6 +692,8 @@ namespace Polyfork.EditorTools
         {
             if (!_schema.TryGetPreset(preset, out var slots)) return;
 
+            RecordUndo($"colorway:{preset}");
+
             foreach (var kv in slots)
             {
                 if (PolyforkParams.TryParseHex(kv.Value, out var c)) _slotColors[kv.Key] = c;
@@ -622,6 +724,7 @@ namespace Polyfork.EditorTools
 
             if (!EditorGUI.EndChangeCheck()) return;
 
+            RecordUndo($"color:{knob.Name}");
             _slotColors[knob.Name] = next;
             _colorway = null;                    // no longer a curated colourway
             ApplyColorsToPreview();
@@ -654,6 +757,7 @@ namespace Polyfork.EditorTools
 
             if (!EditorGUI.EndChangeCheck()) return;
 
+            RecordUndo($"range:{knob.Name}");    // coalesced, so a whole drag is one step
             _ranges[knob.Name] = next;
             QueuePreviewRebuild();               // debounced: geometry needs a round trip
         }
