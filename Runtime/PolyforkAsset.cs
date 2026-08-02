@@ -25,9 +25,22 @@ namespace Polyfork
         /// <summary>Real-world size in metres. Null when Polyfork has not published one.</summary>
         public float? SizeMeters;
 
-        public string[] Palette = Array.Empty<string>();
+        /// <summary>
+        /// The asset's dominant colours, most-used first.
+        ///
+        /// This is a summary of what the model actually looks like, not the kit's full
+        /// palette: a handful of weighted swatches rather than every colour in the range.
+        /// </summary>
+        public PolyforkSwatch[] Palette = Array.Empty<PolyforkSwatch>();
 
         public override string ToString() => $"{Title} [{Id}] {Triangles}tri kit={Kit}";
+
+        /// <summary>
+        /// Parses one asset record from raw catalogue JSON. Public so callers (and tests)
+        /// can work with a stored payload without taking a dependency on the JSON library.
+        /// </summary>
+        public static PolyforkAsset FromJson(string json) =>
+            string.IsNullOrWhiteSpace(json) ? null : Parse(JObject.Parse(json));
 
         internal static PolyforkAsset Parse(JObject o)
         {
@@ -54,9 +67,48 @@ namespace Polyfork
                 a.SizeMeters = size.Value<float>();
 
             if (o["palette"] is JArray pal)
-                a.Palette = pal.Select(t => (string)t).Where(s => s != null).ToArray();
+                a.Palette = pal.Select(PolyforkSwatch.Parse).Where(s => s != null).ToArray();
 
             return a;
+        }
+    }
+
+    /// <summary>One entry of an asset's dominant-colour summary.</summary>
+    public sealed class PolyforkSwatch
+    {
+        public string Hex;
+
+        /// <summary>Roughly how much of the model wears this colour, 0..1.</summary>
+        public float Share;
+
+        public override string ToString() => $"{Hex} ({Share:P0})";
+
+        /// <summary>
+        /// Reads either the current object form ({"hex":"#479","share":0.75}) or the older
+        /// plain-string form, so a client works against both shapes of the catalogue.
+        /// </summary>
+        internal static PolyforkSwatch Parse(JToken token)
+        {
+            switch (token?.Type)
+            {
+                case JTokenType.String:
+                    return new PolyforkSwatch { Hex = token.Value<string>(), Share = 0f };
+
+                case JTokenType.Object:
+                    var hex = (string)token["hex"];
+                    if (string.IsNullOrEmpty(hex)) return null;
+                    var share = token["share"];
+                    return new PolyforkSwatch
+                    {
+                        Hex = hex,
+                        Share = share?.Type is JTokenType.Float or JTokenType.Integer
+                            ? share.Value<float>()
+                            : 0f
+                    };
+
+                default:
+                    return null;
+            }
         }
     }
 

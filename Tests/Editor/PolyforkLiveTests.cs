@@ -23,11 +23,20 @@ namespace Polyfork.Tests
         static PolyforkClient NewClient() =>
             new() { ApiKey = PolyforkCredentials.Resolve(null) };
 
-        /// <summary>Bridges a Task into a UnityTest coroutine and rethrows failures.</summary>
+        /// <summary>
+        /// Bridges a Task into a UnityTest coroutine and rethrows failures.
+        /// Logs the full AggregateException first: GetBaseException keeps the message but
+        /// discards the inner stack, which is the part that says where it actually broke.
+        /// </summary>
         static IEnumerator Await(Task task)
         {
             while (!task.IsCompleted) yield return null;
-            if (task.IsFaulted) throw task.Exception?.GetBaseException() ?? new System.Exception("task failed");
+            if (!task.IsFaulted) yield break;
+
+            // Warning, not error: an error log is itself treated as a test failure by Unity,
+            // which would mask the real assertion. The throw below is what fails the test.
+            Debug.LogWarning($"[Polyfork] awaited task faulted:\n{task.Exception}");
+            throw task.Exception?.GetBaseException() ?? new System.Exception("task failed");
         }
 
         [UnityTest]

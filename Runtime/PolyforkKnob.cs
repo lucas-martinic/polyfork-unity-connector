@@ -227,8 +227,9 @@ namespace Polyfork
             }
         }
 
+        /// <summary>Accepts both #RRGGBB and the #RGB shorthand the catalogue uses.</summary>
         internal static bool IsHex(string s) =>
-            !string.IsNullOrEmpty(s) && s.Length == 7 && s[0] == '#';
+            !string.IsNullOrEmpty(s) && s[0] == '#' && (s.Length == 7 || s.Length == 4);
 
         /// <summary>
         /// The default colour of every recolourable slot, as authored by Polyfork.
@@ -250,8 +251,16 @@ namespace Polyfork
         {
             color = default;
             if (!IsHex(hex)) return false;
-            if (!int.TryParse(hex.Substring(1), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var v))
+
+            var digits = hex.Substring(1);
+
+            // Expand #RGB to #RRGGBB: each digit doubles, so #479 is #447799.
+            if (digits.Length == 3)
+                digits = new string(new[] { digits[0], digits[0], digits[1], digits[1], digits[2], digits[2] });
+
+            if (!int.TryParse(digits, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var v))
                 return false;
+
             color = new Color(
                 ((v >> 16) & 0xFF) / 255f,
                 ((v >> 8) & 0xFF) / 255f,

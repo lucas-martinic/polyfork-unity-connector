@@ -155,6 +155,46 @@ namespace Polyfork.Tests
         }
 
         [Test]
+        public void PaletteParsesTheWeightedObjectForm()
+        {
+            // The catalogue publishes dominant colours as {hex, share}. An earlier shape was
+            // a plain array of hex strings, and casting an object to string threw
+            // "Can not convert Object to String" - which is how this was found.
+            const string json = @"{
+""id"":""x"",""title"":""X"",
+""palette"":[{""hex"":""#479"",""share"":0.75},{""hex"":""#8FB4C9"",""share"":0.2}]}";
+
+            var asset = PolyforkAsset.FromJson(json);
+
+            Assert.AreEqual(2, asset.Palette.Length);
+            Assert.AreEqual("#479", asset.Palette[0].Hex);
+            Assert.AreEqual(0.75f, asset.Palette[0].Share, 1e-4f);
+        }
+
+        [Test]
+        public void PaletteStillAcceptsThePlainStringForm()
+        {
+            const string json = @"{""id"":""x"",""title"":""X"",""palette"":[""#8FB4C9"",""#1B1D20""]}";
+
+            var asset = PolyforkAsset.FromJson(json);
+
+            Assert.AreEqual(2, asset.Palette.Length);
+            Assert.AreEqual("#8FB4C9", asset.Palette[0].Hex);
+        }
+
+        [Test]
+        public void ShorthandHexExpandsCorrectly()
+        {
+            // #479 must mean #447799, not fail to parse. The catalogue uses this form.
+            Assert.IsTrue(PolyforkParams.TryParseHex("#479", out var shorthand));
+            Assert.IsTrue(PolyforkParams.TryParseHex("#447799", out var full));
+
+            Assert.AreEqual(full.r, shorthand.r, 1e-5f);
+            Assert.AreEqual(full.g, shorthand.g, 1e-5f);
+            Assert.AreEqual(full.b, shorthand.b, 1e-5f);
+        }
+
+        [Test]
         public void HexParsingIsExact()
         {
             Assert.IsTrue(PolyforkParams.TryParseHex("#8FB4C9", out var c));
