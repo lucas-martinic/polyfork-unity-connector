@@ -1,0 +1,27 @@
+{
+    "name": "Polyfork.Connector.Tests",
+    "rootNamespace": "Polyfork.Tests",
+    "references": [
+        "Polyfork.Connector",
+        "Polyfork.Connector.Editor",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner",
+        "glTFast",
+        "Unity.Nuget.Newtonsoft-Json"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDES_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

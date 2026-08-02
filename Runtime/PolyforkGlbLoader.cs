@@ -106,7 +106,12 @@ namespace Polyfork
         public async Task<GameObject> InstantiateAsync(
             byte[] bytes, string sourceUri, Transform parent = null, CancellationToken ct = default)
         {
-            var gltf = new GltfImport();
+            // Outside play mode glTFast's default defer agent spawns a "glTF-StableFramerate"
+            // object and calls DontDestroyOnLoad, which is illegal in the editor and aborts
+            // the import. UninterruptedDeferAgent does the work in one go instead, which is
+            // what an editor-side load wants anyway.
+            var deferAgent = Application.isPlaying ? null : new UninterruptedDeferAgent();
+            var gltf = new GltfImport(deferAgent: deferAgent);
 
             var settings = new ImportSettings
             {
@@ -129,11 +134,31 @@ namespace Polyfork
             var instantiated = await gltf.InstantiateMainSceneAsync(root.transform, ct);
             if (!instantiated)
             {
-                UnityEngine.Object.Destroy(root);
+                DestroyObject(root);
                 throw new PolyforkLoadException($"glTF instantiation failed for {sourceUri}");
             }
 
+            // In the editor these are transient (preview / import staging), so keep the whole
+            // subtree out of the open scene and out of the user's save. Applied after
+            // instantiation so glTFast's children are covered too.
+            if (!Application.isPlaying)
+            {
+                foreach (var t in root.GetComponentsInChildren<Transform>(true))
+                    t.gameObject.hideFlags = HideFlags.HideAndDontSave;
+            }
+
             return root;
+        }
+
+        /// <summary>
+        /// Destroy() is deferred to the end of the frame and does nothing outside play mode,
+        /// so editor-side callers need DestroyImmediate.
+        /// </summary>
+        static void DestroyObject(UnityEngine.Object obj)
+        {
+            if (obj == null) return;
+            if (Application.isPlaying) UnityEngine.Object.Destroy(obj);
+            else UnityEngine.Object.DestroyImmediate(obj);
         }
 
         static string CacheKey(string url)

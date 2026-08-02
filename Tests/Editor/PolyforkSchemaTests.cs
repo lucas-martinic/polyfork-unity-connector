@@ -1,0 +1,194 @@
+using System.Linq;
+using NUnit.Framework;
+using UnityEngine;
+
+namespace Polyfork.Tests
+{
+    /// <summary>
+    /// Offline tests over a real /cdn/{id}-params.json payload.
+    ///
+    /// These pin the rules that make the integration honest: which knobs can be applied,
+    /// how, and which are deliberately hidden. They need no network and no XR packages,
+    /// so they also prove the package stands alone.
+    /// </summary>
+    public class PolyforkSchemaTests
+    {
+        /// <summary>Trimmed but verbatim schema for plastic-drum-da992f.</summary>
+        const string DrumParams = @"{
+""params"":{
+ ""colorway"":{""type"":""choice"",""default"":""chemical-blue"",""label"":""Colorway"",
+   ""describe"":""Curated kit-coherent scheme."",
+   ""options"":[""chemical-blue"",""kerosene-red"",""coolant-green"",""food-cream""]},
+ ""body"":{""type"":""color"",""default"":""#8FB4C9"",""label"":""Body"",""describe"":""Shell albedo.""},
+ ""lid"":{""type"":""color"",""default"":""#4E5459"",""label"":""Head"",""describe"":""Head disc albedo.""},
+ ""bung"":{""type"":""color"",""default"":""#1B1D20"",""label"":""Bung caps"",""describe"":""Cap albedo.""},
+ ""tallness"":{""type"":""range"",""default"":0.9,""label"":""Tallness"",""describe"":""Height in metres."",
+   ""affects"":""geometry"",""min"":0.7,""max"":1.12},
+ ""facets"":{""type"":""range"",""default"":14,""label"":""Facets"",""describe"":""Flat vertical faces."",
+   ""affects"":""geometry"",""min"":8,""max"":15},
+ ""taper"":{""type"":""range"",""default"":0,""label"":""Taper"",""describe"":""Wall narrowing."",
+   ""affects"":""geometry"",""min"":0,""max"":0.26}},
+""presets"":{
+ ""chemical-blue"":{""body"":""#8FB4C9"",""lid"":""#4E5459"",""bung"":""#1B1D20""},
+ ""kerosene-red"":{""body"":""#B5462F"",""lid"":""#4E5459"",""bung"":""#1B1D20""},
+ ""coolant-green"":{""body"":""#3F8A5E"",""lid"":""#4E5459"",""bung"":""#1B1D20""},
+ ""food-cream"":{""body"":""#E4E2DC"",""lid"":""#5B6E8C"",""bung"":""#2E3134""}},
+""rev"":1785684234}";
+
+        /// <summary>Road tile: has structural choice/toggle knobs that must stay hidden.</summary>
+        const string RoadParams = @"{
+""params"":{
+ ""piece"":{""type"":""choice"",""default"":""straight"",""label"":""Piece"",""describe"":""Tile shape."",
+   ""affects"":""geometry"",""options"":[""straight"",""corner"",""t-junction"",""crossroads"",""end""]},
+ ""lines"":{""type"":""toggle"",""default"":false,""label"":""Lines"",""describe"":""Painted lines."",""affects"":""geometry""},
+ ""colorway"":{""type"":""choice"",""default"":""city-asphalt"",""label"":""Colorway"",""describe"":""Scheme."",
+   ""options"":[""city-asphalt"",""fresh-blacktop""]},
+ ""asphalt"":{""type"":""color"",""default"":""#3C4145"",""label"":""Asphalt"",""describe"":""Road albedo.""},
+ ""paint"":{""type"":""color"",""default"":""#E4E2DC"",""label"":""Paint"",""describe"":""Marking albedo.""},
+ ""patchCount"":{""type"":""range"",""default"":0,""label"":""Patch count"",""describe"":""Repairs."",
+   ""affects"":""geometry"",""min"":0,""max"":10}},
+""presets"":{
+ ""city-asphalt"":{""asphalt"":""#3C4145"",""paint"":""#E4E2DC""},
+ ""fresh-blacktop"":{""asphalt"":""#2E3134"",""paint"":""#F2EFE7""}},
+""rev"":1}";
+
+        static PolyforkParams Drum() => PolyforkParams.Parse("plastic-drum-da992f", DrumParams);
+        static PolyforkParams Road() => PolyforkParams.Parse("asphalt-road-tile-f6593c", RoadParams);
+
+        [Test]
+        public void ParsesEveryKnobAndPreset()
+        {
+            var schema = Drum();
+            Assert.AreEqual(7, schema.Knobs.Count);
+            Assert.AreEqual(4, schema.PresetNames.Count);
+            Assert.AreEqual("Tallness", schema.Knobs["tallness"].Label);
+            Assert.AreEqual("Bung caps", schema.Knobs["bung"].Label);
+        }
+
+        [Test]
+        public void RangeKnobsAreServerRebuilt()
+        {
+            var schema = Drum();
+            foreach (var name in new[] { "tallness", "facets", "taper" })
+            {
+                Assert.AreEqual(PolyforkKnobSupport.ServerRebuild, schema.Knobs[name].Support,
+                    $"'{name}' is a range knob and is the only kind the remix endpoint bakes.");
+            }
+        }
+
+        [Test]
+        public void ColorKnobsAreLocallyRecoloured()
+        {
+            var schema = Drum();
+            foreach (var name in new[] { "body", "lid", "bung" })
+                Assert.AreEqual(PolyforkKnobSupport.LocalRecolor, schema.Knobs[name].Support);
+        }
+
+        [Test]
+        public void ColorwayIsLocalBecauseItsOptionsAreAllPresets()
+        {
+            Assert.AreEqual(PolyforkKnobSupport.LocalRecolor, Drum().Knobs["colorway"].Support);
+            Assert.AreEqual(PolyforkKnobSupport.LocalRecolor, Road().Knobs["colorway"].Support);
+        }
+
+        [Test]
+        public void StructuralKnobsAreHiddenRatherThanDead()
+        {
+            var schema = Road();
+
+            // The endpoint ignores these and they change topology, so they cannot be
+            // emulated locally either. Showing them would be a control that does nothing.
+            Assert.AreEqual(PolyforkKnobSupport.Unsupported, schema.Knobs["piece"].Support);
+            Assert.AreEqual(PolyforkKnobSupport.Unsupported, schema.Knobs["lines"].Support);
+
+            var remixable = schema.Remixable.Select(k => k.Name).ToList();
+            CollectionAssert.DoesNotContain(remixable, "piece");
+            CollectionAssert.DoesNotContain(remixable, "lines");
+            CollectionAssert.Contains(remixable, "patchCount");
+            CollectionAssert.Contains(remixable, "colorway");
+        }
+
+        [Test]
+        public void IntegralRangesAreDetected()
+        {
+            var schema = Drum();
+            Assert.IsTrue(schema.Knobs["facets"].IsIntegral, "facets is 8..15, whole numbers");
+            Assert.IsFalse(schema.Knobs["tallness"].IsIntegral, "tallness is 0.7..1.12");
+        }
+
+        [Test]
+        public void DefaultSlotColorsMatchThePublishedHexes()
+        {
+            var slots = Drum().DefaultSlotColors();
+
+            Assert.IsTrue(PolyforkParams.TryParseHex("#8FB4C9", out var body));
+            Assert.AreEqual(body, slots["body"]);
+            Assert.AreEqual(3, slots.Count, "only colour knobs own a vertex-colour slot");
+        }
+
+        [Test]
+        public void PresetExpandsToEverySlotItDefines()
+        {
+            Assert.IsTrue(Drum().TryGetPreset("food-cream", out var slots));
+            Assert.AreEqual("#E4E2DC", slots["body"]);
+            Assert.AreEqual("#5B6E8C", slots["lid"]);
+            Assert.AreEqual("#2E3134", slots["bung"]);
+        }
+
+        [Test]
+        public void RemixUrlCarriesOnlyRangeKnobs()
+        {
+            var client = new PolyforkClient();
+            var url = client.RemixGlbUrl("plastic-drum-da992f",
+                new System.Collections.Generic.Dictionary<string, float> { ["tallness"] = 1.12f });
+
+            StringAssert.Contains("plastic-drum-da992f-remix.glb", url);
+            StringAssert.Contains("tallness", url);
+        }
+
+        [Test]
+        public void RemixUrlWithNoParamsIsTheBareEndpoint()
+        {
+            var url = new PolyforkClient().RemixGlbUrl("x", null);
+            Assert.IsFalse(url.Contains("?"), "an empty param set should not add a query string");
+        }
+
+        [Test]
+        public void HexParsingIsExact()
+        {
+            Assert.IsTrue(PolyforkParams.TryParseHex("#8FB4C9", out var c));
+            Assert.AreEqual(0x8F / 255f, c.r, 1e-5f);
+            Assert.AreEqual(0xB4 / 255f, c.g, 1e-5f);
+            Assert.AreEqual(0xC9 / 255f, c.b, 1e-5f);
+
+            Assert.IsFalse(PolyforkParams.TryParseHex("8FB4C9", out _), "missing #");
+            Assert.IsFalse(PolyforkParams.TryParseHex(null, out _));
+        }
+
+        [Test]
+        public void BudgetRefusesOnceSpentAndIsUnlimitedWhenZero()
+        {
+            var budget = new PolyforkRemixBudget(3);
+            Assert.IsTrue(budget.TryConsume());
+            Assert.IsTrue(budget.TryConsume());
+            Assert.IsTrue(budget.TryConsume());
+            Assert.IsFalse(budget.TryConsume(), "fourth request exceeds a budget of three");
+            Assert.AreEqual(0, budget.Remaining);
+
+            var unlimited = new PolyforkRemixBudget(0);
+            Assert.IsTrue(unlimited.Unlimited);
+            for (var i = 0; i < 100; i++) Assert.IsTrue(unlimited.TryConsume());
+        }
+
+        [Test]
+        public void CredentialsRedactionNeverLeaksTheKey()
+        {
+            const string key = "pf_live_0123456789abcdef";
+            var shown = PolyforkCredentials.Redact(key);
+
+            Assert.IsFalse(shown.Contains("0123456789"), "the middle must not be printable");
+            StringAssert.StartsWith("pf_liv", shown);
+            Assert.AreEqual("(none)", PolyforkCredentials.Redact(null));
+        }
+    }
+}
