@@ -39,7 +39,7 @@ namespace Polyfork.EditorTools
         // ---- catalogue ------------------------------------------------------
         readonly List<PolyforkAsset> _all = new();
         List<PolyforkAsset> _filtered = new();
-        string _status = "Connecting…";
+        string _status = "Connecting...";
         bool _loading;
 
         // ---- filters --------------------------------------------------------
@@ -55,6 +55,11 @@ namespace Polyfork.EditorTools
         // ---- selection ------------------------------------------------------
         PolyforkAsset _selected;
         PolyforkParams _schema;
+        string _previewedAssetId;
+
+        /// <summary>Slot binding for the object currently in the preview, so colour edits
+        /// can be applied in place instead of re-fetching the GLB.</summary>
+        PolyforkColorSlots _previewSlots;
         readonly Dictionary<string, float> _ranges = new();
         readonly Dictionary<string, Color> _slotColors = new();
         string _colorway;
@@ -63,6 +68,12 @@ namespace Polyfork.EditorTools
         bool _previewDirty;
         double _rebuildAt;
         bool _rebuilding;
+
+        // ---- rate limiting --------------------------------------------------
+        double _rateLimitedUntil;
+        bool _promptedForKey;
+
+        bool IsRateLimited => EditorApplication.timeSinceStartup < _rateLimitedUntil;
         string _importMessage;
         MessageType _importMessageType = MessageType.Info;
         string _importFolder = PolyforkAssetImporter.DefaultFolder;
@@ -79,12 +90,14 @@ namespace Polyfork.EditorTools
             _thumbs.Changed += Repaint;
             _preview = new PolyforkAssetPreview();
 
+            PolyforkKeySettings.Changed += OnKeyChanged;
             EditorApplication.update += OnEditorUpdate;
             _ = LoadCatalogueAsync();
         }
 
         void OnDisable()
         {
+            PolyforkKeySettings.Changed -= OnKeyChanged;
             EditorApplication.update -= OnEditorUpdate;
             _cts?.Cancel();
             _cts?.Dispose();
@@ -92,13 +105,43 @@ namespace Polyfork.EditorTools
             _preview?.Dispose();
         }
 
+        /// <summary>A newly saved key clears the limit and re-arms the client immediately.</summary>
+        void OnKeyChanged()
+        {
+            _client.ApiKey = PolyforkCredentials.Resolve(null);
+            _rateLimitedUntil = 0d;
+            _promptedForKey = false;
+            _status = PolyforkKeySettings.HasKey ? "API key active" : $"{_all.Count} assets";
+            QueuePreviewRebuild(immediate: true);
+            Repaint();
+        }
+
+        /// <summary>
+        /// Records a 429 and, once per session, opens the key prompt. Repeated limits after
+        /// that only update the banner, so the window does not nag.
+        /// </summary>
+        void HandleRateLimit(PolyforkRateLimitException e)
+        {
+            _rateLimitedUntil = EditorApplication.timeSinceStartup + e.RetryAfter.TotalSeconds;
+            _status = "Rate limited";
+
+            if (_promptedForKey) return;
+            _promptedForKey = true;
+            PolyforkApiKeyWindow.OpenRateLimited(e.RetryAfter);
+        }
+
         void OnEditorUpdate()
         {
-            if (_previewDirty && !_rebuilding && EditorApplication.timeSinceStartup >= _rebuildAt)
+            // Geometry rebuilds need the network, so hold them while capped rather than
+            // firing requests that can only fail. Colour edits are local and unaffected.
+            if (_previewDirty && !_rebuilding && !IsRateLimited &&
+                EditorApplication.timeSinceStartup >= _rebuildAt)
             {
                 _previewDirty = false;
                 _ = RebuildPreviewAsync();
             }
+
+            if (IsRateLimited) Repaint();   // keep the countdown ticking
         }
 
         // =====================================================================
@@ -108,7 +151,7 @@ namespace Polyfork.EditorTools
         async Task LoadCatalogueAsync()
         {
             _loading = true;
-            _status = "Loading catalogue…";
+            _status = "Loading catalogue...";
             Repaint();
 
             try
@@ -173,6 +216,7 @@ namespace Polyfork.EditorTools
 
             _selected = asset;
             _schema = null;
+            _previewedAssetId = null;      // a new asset should be framed, not inherit zoom
             _ranges.Clear();
             _slotColors.Clear();
             _colorway = null;
@@ -267,16 +311,22 @@ namespace Polyfork.EditorTools
                 }
 
                 // Colours are applied locally: the remix endpoint does not bake them.
-                if (_schema != null && _slotColors.Count > 0)
-                {
-                    var slots = PolyforkColorSlots.Build(go, _schema);
-                    slots.Apply(_slotColors);
-                }
+                // Keep the binding so later colour edits skip the network entirely.
+                _previewSlots = _schema != null ? PolyforkColorSlots.Build(go, _schema) : null;
+                if (_slotColors.Count > 0) _previewSlots?.Apply(_slotColors);
 
-                _preview.SetTarget(go);
+                // Only re-frame when the asset itself changed. A knob-driven rebuild must
+                // keep the user's zoom, so a geometry change reads as the model resizing.
+                var sameAsset = _previewedAssetId == asset.Id;
+                _preview.SetTarget(go, frameCamera: !sameAsset);
+                _previewedAssetId = asset.Id;
             }
             catch (OperationCanceledException)
             {
+            }
+            catch (PolyforkRateLimitException e)
+            {
+                HandleRateLimit(e);
             }
             catch (Exception e)
             {
@@ -296,6 +346,7 @@ namespace Polyfork.EditorTools
         void OnGUI()
         {
             DrawToolbar();
+            DrawRateLimitBanner();
 
             using (new EditorGUILayout.HorizontalScope())
             {
@@ -304,6 +355,26 @@ namespace Polyfork.EditorTools
             }
 
             DrawStatusBar();
+        }
+
+        void DrawRateLimitBanner()
+        {
+            if (!IsRateLimited) return;
+
+            var remaining = TimeSpan.FromSeconds(_rateLimitedUntil - EditorApplication.timeSinceStartup);
+            var wait = remaining.TotalMinutes >= 1
+                ? $"{remaining.TotalMinutes:0} min"
+                : $"{remaining.TotalSeconds:0} s";
+
+            using (new EditorGUILayout.HorizontalScope(EditorStyles.helpBox))
+            {
+                EditorGUILayout.LabelField(
+                    $"Remix rate limit reached - resets in {wait}. Colour knobs still work; geometry needs a key.",
+                    EditorStyles.wordWrappedMiniLabel);
+
+                if (GUILayout.Button("Add API key", GUILayout.Width(96f), GUILayout.Height(20f)))
+                    PolyforkApiKeyWindow.Open();
+            }
         }
 
         void DrawToolbar()
@@ -336,6 +407,10 @@ namespace Polyfork.EditorTools
 
                 GUILayout.FlexibleSpace();
 
+                var keyed = PolyforkKeySettings.HasKey || !string.IsNullOrEmpty(_client?.ApiKey);
+                if (GUILayout.Button(keyed ? "Key active" : "Add API key", EditorStyles.toolbarButton, GUILayout.Width(84f)))
+                    PolyforkApiKeyWindow.Open();
+
                 using (new EditorGUI.DisabledScope(_loading))
                 {
                     if (GUILayout.Button("Refresh", EditorStyles.toolbarButton, GUILayout.Width(60f)))
@@ -351,7 +426,7 @@ namespace Polyfork.EditorTools
 
             if (_filtered.Count == 0)
             {
-                EditorGUILayout.HelpBox(_loading ? "Loading…" : "No assets match these filters.", MessageType.Info);
+                EditorGUILayout.HelpBox(_loading ? "Loading..." : "No assets match these filters.", MessageType.Info);
             }
             else
             {
@@ -396,8 +471,8 @@ namespace Polyfork.EditorTools
 
             var metaRect = new Rect(rect.x + 4f, rect.yMax - 12f, rect.width - 8f, 12f);
             var badge = asset.Free ? "free" : "pro";
-            if (asset.Remixable) badge += " · remix";
-            GUI.Label(metaRect, $"{asset.Triangles} tri · {badge}", EditorStyles.miniLabel);
+            if (asset.Remixable) badge += " - remix";
+            GUI.Label(metaRect, $"{asset.Triangles} tri - {badge}", EditorStyles.miniLabel);
 
             if (Event.current.type == EventType.MouseDown && rect.Contains(Event.current.mousePosition))
             {
@@ -420,7 +495,7 @@ namespace Polyfork.EditorTools
 
             EditorGUILayout.LabelField(_selected.Title ?? _selected.Id, EditorStyles.boldLabel);
             EditorGUILayout.LabelField(
-                $"{_selected.Triangles} tri · {_selected.Class} · {(_selected.Free ? "free" : $"${_selected.PriceUsdOrZero()}")}",
+                $"{_selected.Triangles} tri - {_selected.Class} - {(_selected.Free ? "free" : $"${_selected.PriceUsdOrZero()}")}",
                 EditorStyles.miniLabel);
 
             var previewRect = GUILayoutUtility.GetRect(DetailWidth - 12f, 200f);
@@ -440,7 +515,7 @@ namespace Polyfork.EditorTools
             if (_schema == null)
             {
                 EditorGUILayout.HelpBox(
-                    _selected.Remixable ? "Loading knobs…" : "This asset has no remix knobs.",
+                    _selected.Remixable ? "Loading knobs..." : "This asset has no remix knobs.",
                     MessageType.None);
                 return;
             }
@@ -469,7 +544,7 @@ namespace Polyfork.EditorTools
             {
                 EditorGUILayout.Space(2f);
                 EditorGUILayout.LabelField(
-                    $"{hidden} structural knob{(hidden == 1 ? "" : "s")} hidden — the remix endpoint does not bake them.",
+                    $"{hidden} structural knob{(hidden == 1 ? "" : "s")} hidden - the remix endpoint does not bake them.",
                     EditorStyles.miniLabel);
             }
 
@@ -523,7 +598,18 @@ namespace Polyfork.EditorTools
             }
             _colorway = preset;
             _colorwayKnob = knobName;
-            QueuePreviewRebuild(immediate: true);
+            ApplyColorsToPreview();
+        }
+
+        /// <summary>
+        /// Recolours the object already on screen. No download, so this keeps working while
+        /// rate limited and stays instant.
+        /// </summary>
+        void ApplyColorsToPreview()
+        {
+            if (_previewSlots != null && _previewSlots.HasSlots) _previewSlots.Apply(_slotColors);
+            else QueuePreviewRebuild(immediate: true);   // nothing bound yet
+            Repaint();
         }
 
         void DrawColorKnob(PolyforkKnob knob)
@@ -538,12 +624,20 @@ namespace Polyfork.EditorTools
 
             _slotColors[knob.Name] = next;
             _colorway = null;                    // no longer a curated colourway
-            QueuePreviewRebuild(immediate: true);
+            ApplyColorsToPreview();
         }
 
         void DrawRangeKnob(PolyforkKnob knob)
         {
             _ranges.TryGetValue(knob.Name, out var current);
+
+            // Geometry is rebuilt server-side, so these are the only controls a rate limit
+            // actually blocks. Grey them out rather than letting drags silently do nothing.
+            using var disabled = new EditorGUI.DisabledScope(IsRateLimited);
+
+            var label = new GUIContent(
+                knob.Label,
+                IsRateLimited ? "Rate limited - add an API key to keep remixing geometry." : knob.Describe);
 
             EditorGUI.BeginChangeCheck();
             float next;
@@ -551,13 +645,11 @@ namespace Polyfork.EditorTools
             if (knob.IsIntegral)
             {
                 next = EditorGUILayout.IntSlider(
-                    new GUIContent(knob.Label, knob.Describe),
-                    Mathf.RoundToInt(current), Mathf.RoundToInt(knob.Min), Mathf.RoundToInt(knob.Max));
+                    label, Mathf.RoundToInt(current), Mathf.RoundToInt(knob.Min), Mathf.RoundToInt(knob.Max));
             }
             else
             {
-                next = EditorGUILayout.Slider(
-                    new GUIContent(knob.Label, knob.Describe), current, knob.Min, knob.Max);
+                next = EditorGUILayout.Slider(label, current, knob.Min, knob.Max);
             }
 
             if (!EditorGUI.EndChangeCheck()) return;
@@ -587,7 +679,7 @@ namespace Polyfork.EditorTools
         async Task ImportAsync()
         {
             var asset = _selected;
-            _importMessage = "Importing…";
+            _importMessage = "Importing...";
             _importMessageType = MessageType.Info;
             Repaint();
 
@@ -608,6 +700,9 @@ namespace Polyfork.EditorTools
             {
                 _importMessage = $"Import failed: {result.Error}";
                 _importMessageType = MessageType.Error;
+
+                if (result.RateLimited)
+                    HandleRateLimit(new PolyforkRateLimitException("import", result.RetryAfter));
             }
 
             Repaint();
@@ -617,7 +712,7 @@ namespace Polyfork.EditorTools
         {
             using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
             {
-                GUILayout.Label(_loading ? "Loading…" : $"{_filtered.Count} of {_all.Count} shown", EditorStyles.miniLabel);
+                GUILayout.Label(_loading ? "Loading..." : $"{_filtered.Count} of {_all.Count} shown", EditorStyles.miniLabel);
                 GUILayout.FlexibleSpace();
                 GUILayout.Label(_status, EditorStyles.miniLabel);
             }

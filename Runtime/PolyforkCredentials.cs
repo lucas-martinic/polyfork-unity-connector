@@ -27,10 +27,18 @@ namespace Polyfork
         {
             None,
             Environment,
+            EditorSettings,
             StreamingAssets,
             PersistentData,
             Inspector
         }
+
+        /// <summary>
+        /// Supplied by the editor assembly so a key entered in the gallery (stored in
+        /// EditorPrefs, which never reaches the repo) is visible to runtime code without
+        /// this assembly depending on UnityEditor.
+        /// </summary>
+        public static Func<string> ExternalProvider { get; set; }
 
         public static string Resolve(string inspectorValue, out Source source)
         {
@@ -41,6 +49,16 @@ namespace Polyfork
             {
                 source = Source.Environment;
                 return env.Trim();
+            }
+
+            string external = null;
+            try { external = ExternalProvider?.Invoke(); }
+            catch (Exception) { /* a broken provider must not break resolution */ }
+
+            if (!string.IsNullOrWhiteSpace(external))
+            {
+                source = Source.EditorSettings;
+                return external.Trim();
             }
 
             var streaming = ReadKeyFile(Path.Combine(Application.streamingAssetsPath, KeyFileName));

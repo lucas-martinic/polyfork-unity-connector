@@ -29,6 +29,10 @@ namespace Polyfork.EditorTools
             public string AssetPath;
             public string Error;
             public bool ColorsBaked;
+
+            /// <summary>Set when the failure was a 429, so callers can offer the key prompt.</summary>
+            public bool RateLimited;
+            public TimeSpan RetryAfter;
         }
 
         /// <summary>
@@ -117,6 +121,13 @@ namespace Polyfork.EditorTools
             catch (OperationCanceledException)
             {
                 result.Error = "Cancelled.";
+                return result;
+            }
+            catch (PolyforkRateLimitException e)
+            {
+                result.RateLimited = true;
+                result.RetryAfter = e.RetryAfter;
+                result.Error = "Rate limited. Add an API key to lift the cap.";
                 return result;
             }
             catch (Exception e)

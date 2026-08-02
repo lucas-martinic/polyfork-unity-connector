@@ -36,9 +36,18 @@ namespace Polyfork.EditorTools
             _utility.ambientColor = new Color(0.35f, 0.36f, 0.40f);
         }
 
-        /// <summary>Takes ownership of the instance and frames it.</summary>
-        public void SetTarget(GameObject go)
+        /// <summary>
+        /// Takes ownership of the instance.
+        ///
+        /// <paramref name="frameCamera"/> should be false when the same asset is simply
+        /// being rebuilt by a knob change: re-framing there would throw away the zoom the
+        /// user set, and it would also hide the thing they are looking for, since holding
+        /// the distance fixed is what makes a geometry change read as the model growing.
+        /// </summary>
+        public void SetTarget(GameObject go, bool frameCamera = true)
         {
+            var hadTarget = _target != null;
+
             Clear();
             EnsureUtility();
 
@@ -49,6 +58,13 @@ namespace Polyfork.EditorTools
             _utility.AddSingleGO(_target);
 
             _bounds = PolyforkSpawner.CalculateBounds(_target);
+
+            if (frameCamera || !hadTarget) Frame();
+        }
+
+        /// <summary>Pulls the camera back to fit the current target.</summary>
+        public void Frame()
+        {
             var size = Mathf.Max(_bounds.size.x, _bounds.size.y, _bounds.size.z);
             _distance = Mathf.Max(0.4f, size * 2.6f);
         }
@@ -113,6 +129,13 @@ namespace Polyfork.EditorTools
 
                 case EventType.ScrollWheel:
                     _distance = Mathf.Clamp(_distance * (1f + e.delta.y * 0.05f), 0.15f, 60f);
+                    e.Use();
+                    GUI.changed = true;
+                    break;
+
+                // Zoom now persists across rebuilds, so offer the scene-view way back.
+                case EventType.KeyDown when e.keyCode == KeyCode.F:
+                    Frame();
                     e.Use();
                     GUI.changed = true;
                     break;
