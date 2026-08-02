@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
@@ -165,19 +166,122 @@ namespace Polyfork.Tests
             Assert.IsFalse(PolyforkParams.TryParseHex(null, out _));
         }
 
-        [Test]
-        public void BudgetRefusesOnceSpentAndIsUnlimitedWhenZero()
-        {
-            var budget = new PolyforkRemixBudget(3);
-            Assert.IsTrue(budget.TryConsume());
-            Assert.IsTrue(budget.TryConsume());
-            Assert.IsTrue(budget.TryConsume());
-            Assert.IsFalse(budget.TryConsume(), "fourth request exceeds a budget of three");
-            Assert.AreEqual(0, budget.Remaining);
+        /// <summary>Verbatim shape of GET /api/me for an unauthenticated caller.</summary>
+        const string AnonAccess = @"{
+""authenticated"":false, ""plan"":""anonymous"",
+""access"":{
+  ""as"":""anonymous"",
+  ""remix_bakes_per_hour"":40, ""remix_bakes_left_this_hour"":38,
+  ""remix_bakes_per_month"":100, ""remix_bakes_left_this_month"":99,
+  ""remix_allowance_resets"":""2026-09-01"",
+  ""remix_allowance_note"":""A free account raises this to 300 a WEEK, and costs an email address.""}}";
 
-            var unlimited = new PolyforkRemixBudget(0);
-            Assert.IsTrue(unlimited.Unlimited);
-            for (var i = 0; i < 100; i++) Assert.IsTrue(unlimited.TryConsume());
+        /// <summary>A free key uses a weekly window instead of a monthly one.</summary>
+        const string FreeAccess = @"{
+""authenticated"":true, ""plan"":""free"",
+""access"":{
+  ""as"":""free"",
+  ""remix_bakes_per_hour"":100, ""remix_bakes_left_this_hour"":100,
+  ""remix_bakes_per_week"":300, ""remix_bakes_left_this_week"":12}}";
+
+        /// <summary>Pro publishes a rate but the longer window is the string "uncapped".</summary>
+        const string ProAccess = @"{
+""authenticated"":true, ""plan"":""pro"",
+""access"":{ ""as"":""pro"",
+  ""remix_bakes_per_hour"":900, ""remix_bakes_left_this_hour"":900,
+  ""remix_bakes_per_week"":""uncapped - a free account gets a weekly allowance, Pro does not""}}";
+
+        [Test]
+        public void AccessParsesTheAnonymousTier()
+        {
+            var a = PolyforkAccess.Parse(AnonAccess);
+
+            Assert.IsFalse(a.Authenticated);
+            Assert.AreEqual("anonymous", a.Plan);
+            Assert.AreEqual(38, a.BakesLeftThisHour);
+            Assert.AreEqual("month", a.PeriodName);
+            Assert.AreEqual(99, a.BakesLeftThisPeriod);
+            Assert.AreEqual(38, a.Remaining, "the tighter of the two windows governs");
+        }
+
+        [Test]
+        public void AccessPicksUpTheWeeklyWindowOnAFreeKey()
+        {
+            var a = PolyforkAccess.Parse(FreeAccess);
+
+            Assert.AreEqual("week", a.PeriodName);
+            Assert.AreEqual(12, a.Remaining, "the weekly remainder is tighter than the hourly one");
+        }
+
+        [Test]
+        public void AccessTreatsAnUncappedWindowAsNoLimit()
+        {
+            // "uncapped" arrives as prose, not a number; it must not parse as zero.
+            var a = PolyforkAccess.Parse(ProAccess);
+
+            Assert.IsTrue(a.PeriodUncapped);
+            Assert.AreEqual(900, a.Remaining, "only the hourly rate constrains Pro");
+        }
+
+        [Test]
+        public void BudgetAssumesTheFloorBeforeItHasSynced()
+        {
+            var budget = new PolyforkRemixBudget();
+
+            Assert.IsFalse(budget.Synced);
+            Assert.AreEqual(PolyforkRemixBudget.UnknownFloor, budget.Effective,
+                "an unreachable /api/me must not be read as plenty");
+            Assert.AreEqual(0, budget.PrewarmAllowance,
+                "nothing speculative should happen on an unknown allowance");
+        }
+
+        [Test]
+        public void BudgetTracksTheServerFigureAndSpendsDown()
+        {
+            var budget = new PolyforkRemixBudget();
+            budget.SyncFrom(PolyforkAccess.Parse(AnonAccess));
+
+            Assert.AreEqual(38, budget.Effective);
+            Assert.IsTrue(budget.TryConsume());
+            Assert.AreEqual(37, budget.Effective);
+        }
+
+        [Test]
+        public void BudgetReservesHeadroomForInteractiveEdits()
+        {
+            var budget = new PolyforkRemixBudget();
+            budget.SyncFrom(PolyforkAccess.Parse(FreeAccess));   // 12 left
+
+            Assert.AreEqual(12 - PolyforkRemixBudget.InteractiveReserve, budget.PrewarmAllowance,
+                "prewarm may only use what is above the reserve");
+            Assert.IsTrue(budget.IsLow, "12 is at or below the warning threshold");
+        }
+
+        [Test]
+        public void BudgetRefusesWhenSpentAndAfterA429()
+        {
+            var budget = new PolyforkRemixBudget();
+            budget.SyncFrom(PolyforkAccess.Parse(FreeAccess));   // 12 left
+
+            for (var i = 0; i < 12; i++) Assert.IsTrue(budget.TryConsume(), $"bake {i + 1} of 12");
+            Assert.IsFalse(budget.TryConsume(), "the thirteenth exceeds the allowance");
+            Assert.IsTrue(budget.IsExhausted);
+
+            var fresh = new PolyforkRemixBudget();
+            fresh.SyncFrom(PolyforkAccess.Parse(ProAccess));
+            Assert.IsFalse(fresh.IsExhausted);
+            fresh.MarkExhausted(TimeSpan.FromMinutes(5));
+            Assert.IsTrue(fresh.IsExhausted, "a server 429 outranks the local mirror");
+        }
+
+        [Test]
+        public void BudgetIsUnlimitedOnlyWhenNoWindowIsPublished()
+        {
+            var budget = new PolyforkRemixBudget();
+            budget.SyncFrom(new PolyforkAccess());               // no figures at all
+
+            Assert.IsTrue(budget.Unlimited);
+            for (var i = 0; i < 100; i++) Assert.IsTrue(budget.TryConsume());
         }
 
         [Test]

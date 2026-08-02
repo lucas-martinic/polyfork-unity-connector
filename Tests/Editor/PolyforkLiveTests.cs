@@ -129,6 +129,81 @@ namespace Polyfork.Tests
         }
 
         [UnityTest]
+        public IEnumerator FlatShadingSurvivesImport()
+        {
+            // Polyfork geometry is deliberately non-indexed: one vertex per triangle corner,
+            // and no NORMAL attribute at all (plastic-drum is 616 tris / 1848 positions).
+            // Flat facets are a property of that topology, so anything that welds or merges
+            // vertices silently turns the whole catalogue into smooth gradients.
+            //
+            // glTFast does not weld today. This test exists so that if an importer setting
+            // or a package upgrade ever starts to, the suite says so instead of the bug
+            // reaching someone's project.
+            var client = NewClient();
+            var loader = new PolyforkGlbLoader(client);
+
+            var task = loader.LoadAsync(client.RemixGlbUrl(DrumId, null));
+            yield return Await(task);
+
+            var go = task.Result;
+            try
+            {
+                var filter = go.GetComponentInChildren<MeshFilter>();
+                Assert.IsNotNull(filter, "the drum should import as a mesh");
+
+                var mesh = filter.sharedMesh;
+                var triangles = mesh.triangles.Length / 3;
+
+                Assert.AreEqual(triangles * 3, mesh.vertexCount,
+                    "vertices were merged: flat shading depends on one vertex per triangle corner");
+
+                // Per-face normals: the three corners of a triangle must agree, and
+                // neighbouring faces must not have been averaged together.
+                var normals = mesh.normals;
+                Assert.AreEqual(mesh.vertexCount, normals.Length, "normals should be generated per vertex");
+
+                var tris = mesh.triangles;
+                var distinct = new List<Vector3>();
+                for (var t = 0; t < tris.Length; t += 3)
+                {
+                    var n0 = normals[tris[t]];
+                    Assert.AreEqual(1f, Vector3.Dot(n0, normals[tris[t + 1]]), 0.01f,
+                        "a triangle's own corners must share one normal (flat face)");
+                    Assert.AreEqual(1f, Vector3.Dot(n0, normals[tris[t + 2]]), 0.01f,
+                        "a triangle's own corners must share one normal (flat face)");
+
+                    if (!distinct.Any(d => Vector3.Dot(d, n0) > 0.999f)) distinct.Add(n0);
+                }
+
+                Assert.Greater(distinct.Count, 4,
+                    "a faceted drum should present many distinct face normals, not a smoothed shell");
+
+                Debug.Log($"[Polyfork] flat shading intact: {triangles} tris, " +
+                          $"{mesh.vertexCount} verts, {distinct.Count} distinct face normals.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator AccessReportsAnAllowanceWithoutAKey()
+        {
+            // /api/me answers unauthenticated, which is what lets the package show the
+            // remaining allowance up front instead of discovering it as a 429.
+            var task = new PolyforkClient().GetAccessAsync();
+            yield return Await(task);
+
+            var access = task.Result;
+            Assert.IsNotNull(access.Plan);
+            Assert.IsNotNull(access.Remaining, "an anonymous caller should still get a figure");
+            Assert.Greater(access.Remaining.Value, -1);
+
+            Debug.Log($"[Polyfork] {access.Describe()}");
+        }
+
+        [UnityTest]
         public IEnumerator ImportWritesAGlbIntoTheProject()
         {
             var client = NewClient();

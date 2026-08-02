@@ -256,6 +256,12 @@ namespace Polyfork
             var budget = Catalog.RemixBudget;
             var loader = Catalog.Loader;
 
+            // Prewarming is speculative: it spends a shared allowance on variants the user
+            // may never look at. Only ever use headroom above the interactive reserve, so a
+            // drag the user actually makes is never the request that hits the wall.
+            var speculationLeft = budget?.PrewarmAllowance ?? int.MaxValue;
+            if (speculationLeft <= 0) return;
+
             // Everything currently off-default forms the base each axis is explored from.
             var basis = new Dictionary<string, float>();
             foreach (var kv in _ranges)
@@ -280,8 +286,13 @@ namespace Polyfork
                         ? Catalog.BaseGlbUrl(Asset)
                         : Catalog.Client.RemixGlbUrl(Asset.Id, payload);
 
+                    // A cached variant is free: it neither costs the server a bake nor us a
+                    // slot, so it never touches the speculation allowance.
                     if (string.IsNullOrEmpty(url) || loader.IsCached(url)) continue;
+
+                    if (speculationLeft <= 0) return;
                     if (budget != null && !budget.TryConsume()) return;   // stop quietly, keep what we have
+                    speculationLeft--;
 
                     try
                     {
@@ -336,8 +347,8 @@ namespace Polyfork
                     if (budget != null && !budget.TryConsume())
                     {
                         Debug.LogWarning(
-                            $"[Polyfork] remix budget exhausted; keeping current mesh for {Asset.Id}. " +
-                            $"Next slot at {budget.NextFreeAt:HH:mm:ss}. Set an API key to lift this.");
+                            $"[Polyfork] out of remix bakes; keeping the current mesh for {Asset.Id}. " +
+                            $"{budget.Access?.UpgradeNote ?? "Add an API key to raise the allowance."}");
                         return;
                     }
                 }

@@ -99,6 +99,15 @@ namespace Polyfork
         public async Task<PolyforkAsset> GetAssetAsync(string id, CancellationToken ct = default)
             => PolyforkAsset.Parse(JObject.Parse(await GetStringAsync($"{_baseUrl}/api/assets/{id}", ct)));
 
+        // ---------------------------------------------------------------- access
+
+        /// <summary>
+        /// Current tier and remaining bake allowance. Answers without a key, so this can be
+        /// called at startup to show the allowance rather than discovering it as a 429.
+        /// </summary>
+        public async Task<PolyforkAccess> GetAccessAsync(CancellationToken ct = default)
+            => PolyforkAccess.Parse(await GetStringAsync($"{_baseUrl}/api/me", ct));
+
         // ---------------------------------------------------------------- knobs
 
         public async Task<PolyforkParams> GetParamsAsync(string id, CancellationToken ct = default)

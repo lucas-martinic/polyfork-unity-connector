@@ -1,100 +1,112 @@
 using System;
-using System.Collections.Generic;
 
 namespace Polyfork
 {
     /// <summary>
-    /// A sliding-window cap on remix rebuilds.
+    /// Tracks how many remix bakes are left, so the package can be polite about a shared
+    /// allowance instead of discovering it as a 429 mid-drag.
     ///
-    /// Polyfork may rate-limit unauthenticated remix requests (reported as ~40/hour).
-    /// Tripping that mid-session would leave sliders frozen, so the client keeps its own
-    /// budget slightly under the server's and degrades predictably instead: a refused
-    /// rebuild falls back to the nearest value already on disk.
+    /// The server is authoritative: values come from GET /api/me and are mirrored locally
+    /// between refreshes so a burst of edits cannot outrun the last sync. Only *new*
+    /// geometry is metered, so anything already in the cache is spent-free.
     ///
-    /// Cache hits never consume budget - only requests that actually reach the network do.
+    /// When the allowance is unknown - no sync yet, or /api/me unreachable - the floor is
+    /// assumed rather than plenty. Guessing high spends someone else's quota; guessing low
+    /// only costs a little latency.
     /// </summary>
     public sealed class PolyforkRemixBudget
     {
-        readonly Queue<DateTime> _spent = new();
-        readonly object _gate = new();
+        /// <summary>Assumed remaining when the server has not told us. Deliberately small.</summary>
+        public const int UnknownFloor = 5;
 
-        public PolyforkRemixBudget(int maxRequests = 32, TimeSpan? window = null)
-        {
-            MaxRequests = maxRequests;
-            Window = window ?? TimeSpan.FromHours(1);
-        }
+        /// <summary>Kept back for interactive edits, so speculative prewarm never starves a drag.</summary>
+        public const int InteractiveReserve = 8;
 
-        /// <summary>0 or less means unlimited (use when an API key is attached).</summary>
-        public int MaxRequests { get; set; }
+        /// <summary>
+        /// Warn at or below this many bakes. Deliberately above the reserve: once the
+        /// remainder is into reserve territory prewarming has already stopped, so warning
+        /// there would be telling the user after the tool had quietly degraded.
+        /// </summary>
+        public const int LowThreshold = InteractiveReserve * 2;
 
-        public TimeSpan Window { get; set; }
+        int? _remaining;
+        DateTime _exhaustedUntilUtc = DateTime.MinValue;
 
-        public bool Unlimited => MaxRequests <= 0;
+        public PolyforkAccess Access { get; private set; }
 
-        public int Remaining
-        {
-            get
-            {
-                if (Unlimited) return int.MaxValue;
-                lock (_gate)
-                {
-                    Trim();
-                    return Math.Max(0, MaxRequests - _spent.Count);
-                }
-            }
-        }
+        public bool Synced { get; private set; }
 
-        /// <summary>When the oldest slot frees up, or null if nothing is queued.</summary>
-        public DateTime? NextFreeAt
+        /// <summary>True when the tier publishes no limit at all.</summary>
+        public bool Unlimited => Synced && _remaining == null;
+
+        public bool IsExhausted => DateTime.UtcNow < _exhaustedUntilUtc || Effective <= 0;
+
+        public bool IsLow => !Unlimited && Effective <= LowThreshold;
+
+        /// <summary>Best current estimate of bakes available.</summary>
+        public int Effective
         {
             get
             {
-                lock (_gate)
-                {
-                    Trim();
-                    return _spent.Count == 0 ? null : _spent.Peek() + Window;
-                }
+                if (DateTime.UtcNow < _exhaustedUntilUtc) return 0;
+                if (!Synced) return UnknownFloor;
+                return _remaining ?? int.MaxValue;
             }
         }
 
-        /// <summary>Takes a slot if one is available.</summary>
-        public bool TryConsume()
-        {
-            if (Unlimited) return true;
+        /// <summary>How many a speculative prewarm may use right now.</summary>
+        public int PrewarmAllowance => Unlimited
+            ? int.MaxValue
+            : Math.Max(0, Effective - InteractiveReserve);
 
-            lock (_gate)
-            {
-                Trim();
-                if (_spent.Count >= MaxRequests) return false;
-                _spent.Enqueue(DateTime.UtcNow);
-                return true;
-            }
+        public void SyncFrom(PolyforkAccess access)
+        {
+            Access = access;
+            _remaining = access?.Remaining;
+            Synced = access != null;
+
+            if (Effective > 0) _exhaustedUntilUtc = DateTime.MinValue;
         }
 
         /// <summary>
-        /// Marks the budget as exhausted until <paramref name="retryAfter"/>, used when the
-        /// server answers 429 and is therefore the authority rather than our estimate.
+        /// Claims one bake. Callers must only call this for a request that will actually
+        /// reach the network - a cache hit is free and must not be counted.
         /// </summary>
+        public bool TryConsume()
+        {
+            if (DateTime.UtcNow < _exhaustedUntilUtc) return false;
+            if (_remaining == null) return true;            // uncapped, or not yet known to be capped
+            if (!Synced) return _remaining > 0;
+
+            if (_remaining <= 0) return false;
+            _remaining--;
+            return true;
+        }
+
+        /// <summary>Applies a server 429; the server outranks our mirror.</summary>
         public void MarkExhausted(TimeSpan retryAfter)
         {
-            lock (_gate)
-            {
-                _spent.Clear();
-                var stamp = DateTime.UtcNow - Window + retryAfter;
-                var count = Math.Max(MaxRequests, 1);
-                for (var i = 0; i < count; i++) _spent.Enqueue(stamp);
-            }
+            _exhaustedUntilUtc = DateTime.UtcNow + retryAfter;
+            _remaining = 0;
+        }
+
+        /// <summary>Human-readable state for a status bar.</summary>
+        public string Describe()
+        {
+            if (!Synced) return "allowance unknown";
+            if (Unlimited) return "unlimited bakes";
+
+            var text = $"{Effective} bake{(Effective == 1 ? "" : "s")} left";
+            if (Access?.PeriodName != null && Access.BakesLeftThisPeriod != null)
+                text += $" ({Access.BakesLeftThisPeriod} this {Access.PeriodName})";
+            return text;
         }
 
         public void Reset()
         {
-            lock (_gate) _spent.Clear();
-        }
-
-        void Trim()
-        {
-            var cutoff = DateTime.UtcNow - Window;
-            while (_spent.Count > 0 && _spent.Peek() < cutoff) _spent.Dequeue();
+            _remaining = null;
+            Synced = false;
+            _exhaustedUntilUtc = DateTime.MinValue;
         }
     }
 }

@@ -71,11 +71,12 @@ namespace Polyfork.EditorTools
         double _rebuildAt;
         bool _rebuilding;
 
-        // ---- rate limiting --------------------------------------------------
+        // ---- allowance ------------------------------------------------------
         double _rateLimitedUntil;
         bool _promptedForKey;
+        readonly PolyforkRemixBudget _budget = new();
 
-        bool IsRateLimited => EditorApplication.timeSinceStartup < _rateLimitedUntil;
+        bool IsRateLimited => EditorApplication.timeSinceStartup < _rateLimitedUntil || _budget.IsExhausted;
         string _importMessage;
         MessageType _importMessageType = MessageType.Info;
         string _importFolder = PolyforkAssetImporter.DefaultFolder;
@@ -94,7 +95,30 @@ namespace Polyfork.EditorTools
 
             PolyforkKeySettings.Changed += OnKeyChanged;
             EditorApplication.update += OnEditorUpdate;
+            _ = RefreshAccessAsync();
             _ = LoadCatalogueAsync();
+        }
+
+        /// <summary>
+        /// Reads the live allowance from /api/me. Keyless, so it works before sign-in and
+        /// lets the window state the remaining bakes instead of surprising the user with a
+        /// 429. If it cannot be reached the budget stays at its floor, which throttles
+        /// speculative prewarming rather than assuming plenty.
+        /// </summary>
+        async Task RefreshAccessAsync()
+        {
+            try
+            {
+                _budget.SyncFrom(await _client.GetAccessAsync(_cts.Token));
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Polyfork] could not read the remix allowance ({e.Message}).");
+            }
+            Repaint();
         }
 
         void OnDisable()
@@ -113,7 +137,9 @@ namespace Polyfork.EditorTools
             _client.ApiKey = PolyforkCredentials.Resolve(null);
             _rateLimitedUntil = 0d;
             _promptedForKey = false;
+            _budget.Reset();
             _status = PolyforkKeySettings.HasKey ? "API key active" : $"{_all.Count} assets";
+            _ = RefreshAccessAsync();        // the new key almost certainly has a new tier
             QueuePreviewRebuild(immediate: true);
             Repaint();
         }
@@ -303,8 +329,17 @@ namespace Polyfork.EditorTools
                 var url = payload.Count == 0 ? asset.PreviewGlb : _client.RemixGlbUrl(asset.Id, payload);
                 if (string.IsNullOrEmpty(url)) return;
 
+                // Only a request that actually leaves the machine can cost a bake, and only
+                // a variant nobody has baked before is metered at all.
+                var billable = payload.Count > 0 && !_loader.IsCached(url);
+                if (billable) _budget.TryConsume();
+
                 var bytes = await _loader.GetBytesAsync(url, _cts.Token);
                 if (_selected != asset) return;
+
+                // Re-read the real figure rather than trusting the local mirror; the variant
+                // may have been baked by someone else already and cost nothing.
+                if (billable) _ = RefreshAccessAsync();
 
                 var go = await _loader.InstantiateAsync(bytes, url, null, _cts.Token);
                 if (_selected != asset)
@@ -441,17 +476,33 @@ namespace Polyfork.EditorTools
 
         void DrawRateLimitBanner()
         {
-            if (!IsRateLimited) return;
+            if (IsRateLimited)
+            {
+                var seconds = _rateLimitedUntil - EditorApplication.timeSinceStartup;
+                var wait = seconds > 60d ? $"{seconds / 60d:0} min"
+                    : seconds > 0d ? $"{seconds:0} s"
+                    : "shortly";
 
-            var remaining = TimeSpan.FromSeconds(_rateLimitedUntil - EditorApplication.timeSinceStartup);
-            var wait = remaining.TotalMinutes >= 1
-                ? $"{remaining.TotalMinutes:0} min"
-                : $"{remaining.TotalSeconds:0} s";
+                using (new EditorGUILayout.HorizontalScope(EditorStyles.helpBox))
+                {
+                    EditorGUILayout.LabelField(
+                        $"Out of remix bakes - resets in {wait}. Colour knobs still work; new geometry needs allowance.",
+                        EditorStyles.wordWrappedMiniLabel);
+
+                    if (GUILayout.Button("Get more", GUILayout.Width(96f), GUILayout.Height(20f)))
+                        PolyforkApiKeyWindow.Open();
+                }
+                return;
+            }
+
+            // Warn while there is still room to act, rather than at the wall.
+            if (!_budget.IsLow) return;
 
             using (new EditorGUILayout.HorizontalScope(EditorStyles.helpBox))
             {
+                var note = _budget.Access?.UpgradeNote;
                 EditorGUILayout.LabelField(
-                    $"Remix rate limit reached - resets in {wait}. Colour knobs still work; geometry needs a key.",
+                    $"{_budget.Describe()}. {(_budget.Access?.Authenticated == true ? "" : note)}".Trim(),
                     EditorStyles.wordWrappedMiniLabel);
 
                 if (GUILayout.Button("Add API key", GUILayout.Width(96f), GUILayout.Height(20f)))
@@ -818,6 +869,18 @@ namespace Polyfork.EditorTools
             {
                 GUILayout.Label(_loading ? "Loading..." : $"{_filtered.Count} of {_all.Count} shown", EditorStyles.miniLabel);
                 GUILayout.FlexibleSpace();
+
+                if (_budget.Synced)
+                {
+                    var style = new GUIStyle(EditorStyles.miniLabel);
+                    if (_budget.IsLow) style.normal.textColor = new Color(0.95f, 0.72f, 0.35f);
+                    GUILayout.Label(
+                        new GUIContent(_budget.Describe(),
+                            "Only new geometry is metered. Variants anyone has already baked are free."),
+                        style);
+                    GUILayout.Space(10f);
+                }
+
                 GUILayout.Label(_status, EditorStyles.miniLabel);
             }
         }

@@ -38,11 +38,9 @@ namespace Polyfork
         [Tooltip("Concurrent downloads. Quest handles a handful comfortably.")]
         [SerializeField, Range(1, 8)] int maxConcurrentPrefetch = 3;
 
-        [Header("Remix budget")]
-        [Tooltip("Cap on remix rebuilds per hour when no API key is set. Polyfork may limit " +
-                 "unauthenticated remixes (~40/hour); staying under it avoids a mid-session 429. " +
-                 "Ignored when an API key is present.")]
-        [SerializeField] int remixRequestsPerHour = 32;
+        // The remix allowance is published by GET /api/me per tier, so it is read from the
+        // server rather than configured here. Until that first sync lands the budget assumes
+        // its floor, which is why nothing speculative happens before it does.
 
         public PolyforkClient Client { get; private set; }
         public PolyforkGlbLoader Loader { get; private set; }
@@ -72,13 +70,11 @@ namespace Polyfork
 
             Client = new PolyforkClient(baseUrl) { ApiKey = key };
             Loader = new PolyforkGlbLoader(Client);
-
-            // The unauthenticated remix cap does not apply to an authenticated connection.
-            RemixBudget = new PolyforkRemixBudget(key != null ? 0 : remixRequestsPerHour);
+            RemixBudget = new PolyforkRemixBudget();
 
             Debug.Log(key != null
-                ? $"[Polyfork] API key {PolyforkCredentials.Redact(key)} from {keySource}; remix budget unlimited."
-                : $"[Polyfork] no API key; public previews only, remix budget {remixRequestsPerHour}/hour.");
+                ? $"[Polyfork] API key {PolyforkCredentials.Redact(key)} from {keySource}."
+                : "[Polyfork] no API key; public previews only.");
 
             if (keySource == PolyforkCredentials.Source.Inspector)
             {
@@ -91,10 +87,34 @@ namespace Polyfork
             _cts = new CancellationTokenSource();
         }
 
+        /// <summary>
+        /// Refreshes the remix allowance. Cheap, keyless, and safe to call after any bake.
+        /// A failure leaves the budget at its floor rather than assuming plenty.
+        /// </summary>
+        public async Task RefreshAccessAsync(CancellationToken ct = default)
+        {
+            try
+            {
+                using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _cts.Token);
+                RemixBudget.SyncFrom(await Client.GetAccessAsync(linked.Token));
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Polyfork] could not read the remix allowance ({e.Message}); " +
+                                 "assuming the floor until it is reachable.");
+            }
+        }
+
         async void Start()
         {
             try
             {
+                await RefreshAccessAsync(_cts.Token);
+                if (RemixBudget.Synced) Debug.Log($"[Polyfork] {RemixBudget.Access.Describe()}");
+
                 var all = await Client.GetAllAssetsAsync(null, _cts.Token);
 
                 var filtered = all.Where(a => !string.IsNullOrEmpty(a.PreviewGlb));
