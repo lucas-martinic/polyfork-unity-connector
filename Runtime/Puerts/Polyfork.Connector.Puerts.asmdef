@@ -1,0 +1,26 @@
+{
+    "name": "Polyfork.Connector.Puerts",
+    "rootNamespace": "Polyfork",
+    "references": [
+        "Polyfork.Connector",
+        "com.tencent.puerts.core",
+        "com.tencent.puerts.quickjs"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "POLYFORK_PUERTS"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.tencent.puerts.quickjs",
+            "expression": "",
+            "define": "POLYFORK_PUERTS"
+        }
+    ],
+    "noEngineReferences": false
+}
