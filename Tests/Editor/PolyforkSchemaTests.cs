@@ -183,6 +183,39 @@ namespace Polyfork.Tests
         }
 
         [Test]
+        public void DownloadFieldDecidesWhetherLocalBakingIsPossible()
+        {
+            // A free asset publishes its module to everyone; a paid one omits the field
+            // entirely until a key is attached. HasModule is what a local baker gates on.
+            const string free = @"{""id"":""a"",""free"":true,""download"":{
+""glb"":""https://polyfork.dev/cdn/a.glb"",""mjs"":""https://polyfork.dev/cdn/a.mjs"",""auth"":""none""}}";
+            const string paid = @"{""id"":""b"",""free"":false}";
+
+            var freeAsset = PolyforkAsset.FromJson(free);
+            Assert.IsTrue(freeAsset.HasModule);
+            Assert.AreEqual("none", freeAsset.Download.Auth);
+
+            var paidAsset = PolyforkAsset.FromJson(paid);
+            Assert.IsNull(paidAsset.Download);
+            Assert.IsFalse(paidAsset.HasModule, "no module means no local bake, so fall back to the server");
+        }
+
+        [Test]
+        public void SizeIsReadAsAVectorNotAScalar()
+        {
+            // size_m is {x,y,z} on the detail endpoint. Typing it as a float silently
+            // dropped it; a scalar from the older shape is treated as a uniform extent.
+            var boxy = PolyforkAsset.FromJson(@"{""id"":""a"",""size_m"":{""x"":4,""y"":3.6,""z"":4}}");
+            Assert.IsNotNull(boxy.SizeMeters);
+            Assert.AreEqual(3.6f, boxy.SizeMeters.Value.y, 1e-4f);
+
+            var scalar = PolyforkAsset.FromJson(@"{""id"":""b"",""size_m"":2}");
+            Assert.AreEqual(new Vector3(2f, 2f, 2f), scalar.SizeMeters.Value);
+
+            Assert.IsNull(PolyforkAsset.FromJson(@"{""id"":""c""}").SizeMeters);
+        }
+
+        [Test]
         public void ShorthandHexExpandsCorrectly()
         {
             // #479 must mean #447799, not fail to parse. The catalogue uses this form.

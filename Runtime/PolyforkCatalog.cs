@@ -31,6 +31,12 @@ namespace Polyfork
         [Tooltip("Skip anything heavier than this. Polyfork averages ~742 triangles; 0 disables the filter.")]
         [SerializeField] int maxTriangles = 3000;
 
+        [Tooltip("Only surface assets whose createAsset() module this connection can fetch. " +
+                 "Those are the ones a local baker can rebuild instantly with every knob live; " +
+                 "without a key that means free assets. Worth enabling for a recording, so the " +
+                 "experience does not alternate between instant and round-tripped.")]
+        [SerializeField] bool requireModule;
+
         [Header("Prefetch")]
         [Tooltip("How many upcoming assets to download and parse ahead of time.")]
         [SerializeField, Range(1, 24)] int warmQueueSize = 8;
@@ -134,6 +140,7 @@ namespace Polyfork
                 var filtered = all.Where(a => !string.IsNullOrEmpty(a.PreviewGlb));
                 if (remixableOnly) filtered = filtered.Where(a => a.Remixable);
                 if (maxTriangles > 0) filtered = filtered.Where(a => a.Triangles <= maxTriangles);
+                if (requireModule) filtered = filtered.Where(a => a.HasModule);
 
                 _assets.AddRange(filtered);
                 Shuffle(_assets);

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json.Linq;
+using UnityEngine;
 
 namespace Polyfork
 {
@@ -22,8 +23,23 @@ namespace Polyfork
         public string PreviewGlb;
         public string Style;
 
-        /// <summary>Real-world size in metres. Null when Polyfork has not published one.</summary>
-        public float? SizeMeters;
+        /// <summary>
+        /// Real-world footprint in metres. The catalogue publishes this as {x,y,z} on the
+        /// detail endpoint and omits it from the list, so it is null while browsing.
+        /// </summary>
+        public Vector3? SizeMeters;
+
+        /// <summary>
+        /// Files this connection may fetch directly, or null when it may not.
+        ///
+        /// This is what decides whether an asset can be baked locally: the module is the
+        /// program, so without it the only option is asking the server to rebuild a mesh.
+        /// Free assets publish it to everyone; paid assets need a key.
+        /// </summary>
+        public PolyforkDownload Download;
+
+        /// <summary>True when the asset's createAsset() module is fetchable by this caller.</summary>
+        public bool HasModule => !string.IsNullOrEmpty(Download?.Mjs);
 
         /// <summary>
         /// The asset's dominant colours, most-used first.
@@ -62,14 +78,65 @@ namespace Polyfork
                 Style = (string)o["style"]
             };
 
-            var size = o["size_m"];
-            if (size != null && size.Type is JTokenType.Float or JTokenType.Integer)
-                a.SizeMeters = size.Value<float>();
+            a.SizeMeters = ParseSize(o["size_m"]);
+            a.Download = PolyforkDownload.Parse(o["download"]);
 
             if (o["palette"] is JArray pal)
                 a.Palette = pal.Select(PolyforkSwatch.Parse).Where(s => s != null).ToArray();
 
             return a;
+        }
+
+        /// <summary>
+        /// Reads size_m, which is an {x,y,z} object. An older shape used a single number,
+        /// so a scalar is treated as a uniform extent rather than dropped.
+        /// </summary>
+        static Vector3? ParseSize(JToken token)
+        {
+            switch (token?.Type)
+            {
+                case JTokenType.Object:
+                    var o = (JObject)token;
+                    return new Vector3(
+                        o["x"]?.Value<float>() ?? 0f,
+                        o["y"]?.Value<float>() ?? 0f,
+                        o["z"]?.Value<float>() ?? 0f);
+
+                case JTokenType.Float:
+                case JTokenType.Integer:
+                    var v = token.Value<float>();
+                    return new Vector3(v, v, v);
+
+                default:
+                    return null;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Direct file URLs for an asset, present only when this connection is allowed them.
+    /// </summary>
+    public sealed class PolyforkDownload
+    {
+        public string Glb;
+
+        /// <summary>The createAsset() program. Its presence is what enables local baking.</summary>
+        public string Mjs;
+
+        /// <summary>"none" when no key is needed; otherwise what the caller must present.</summary>
+        public string Auth;
+
+        internal static PolyforkDownload Parse(JToken token)
+        {
+            if (token is not JObject o) return null;
+
+            var d = new PolyforkDownload
+            {
+                Glb = (string)o["glb"],
+                Mjs = (string)o["mjs"],
+                Auth = (string)o["auth"]
+            };
+            return d.Glb == null && d.Mjs == null ? null : d;
         }
     }
 
