@@ -38,10 +38,11 @@ namespace Polyfork
         [SerializeField] bool requireModule;
 
         [Header("Local baking")]
-        [Tooltip("Run asset modules in-process when a JS engine is installed. Every knob becomes " +
-                 "live, nothing is metered, and a rebuild costs well under a millisecond instead " +
-                 "of a round trip. Turn off to force the server path for comparison.")]
-        [SerializeField] bool enableLocalBaking = true;
+        [Tooltip("Run asset modules in-process when a JS engine is installed. Off by default: " +
+                 "QuickJS measured 41.5 ms a bake, which is three frames at 72 Hz and hitches " +
+                 "visibly in VR, and deforming sliders are already handled by interpolation. " +
+                 "Worth turning on for structural knobs, ideally with the V8 backend.")]
+        [SerializeField] bool enableLocalBaking;
 
         IPolyforkJsRuntime _jsRuntime;
 
