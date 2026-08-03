@@ -48,6 +48,17 @@ namespace Polyfork
         /// <summary>Guards remix rebuilds. Unlimited once an API key is attached.</summary>
         public PolyforkRemixBudget RemixBudget { get; private set; }
 
+        /// <summary>
+        /// Available bake paths, best first. The server baker is always registered; a local
+        /// baker that runs asset modules registers itself on top when its prerequisites are
+        /// met, at which point every knob becomes live and nothing is metered.
+        /// </summary>
+        public PolyforkBakerRegistry Bakers { get; private set; }
+
+        /// <summary>The baker that would actually serve this asset.</summary>
+        public IPolyforkBaker BakerFor(PolyforkAsset asset, PolyforkParams schema)
+            => Bakers?.Resolve(asset, schema);
+
         /// <summary>Every asset that passed the filter, in shuffled order.</summary>
         public IReadOnlyList<PolyforkAsset> Assets => _assets;
 
@@ -71,6 +82,9 @@ namespace Polyfork
             Client = new PolyforkClient(baseUrl) { ApiKey = key };
             Loader = new PolyforkGlbLoader(Client);
             RemixBudget = new PolyforkRemixBudget();
+
+            Bakers = new PolyforkBakerRegistry();
+            Bakers.Register(new PolyforkServerBaker(Client, Loader, RemixBudget));
 
             Debug.Log(key != null
                 ? $"[Polyfork] API key {PolyforkCredentials.Redact(key)} from {keySource}."
