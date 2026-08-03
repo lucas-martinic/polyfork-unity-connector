@@ -216,6 +216,47 @@ namespace Polyfork.Tests
         }
 
         [Test]
+        public void MeshPayloadDecodesWhatTheBridgeProduces()
+        {
+            // One triangle, non-indexed, with vertex colours - the shape every Polyfork
+            // asset arrives in. Buffers are base64 Float32 so a bake costs one marshal.
+            var positions = new[] { 0f, 0f, 0f, 1f, 0f, 0f, 0f, 1f, 0f };
+            var colors = new[] { 1f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 1f };
+
+            string B64(float[] f)
+            {
+                var bytes = new byte[f.Length * 4];
+                System.Buffer.BlockCopy(f, 0, bytes, 0, bytes.Length);
+                return System.Convert.ToBase64String(bytes);
+            }
+
+            var json = $@"{{""meshes"":[{{
+""name"":""tri"",""vertexCount"":3,
+""matrix"":[1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1],
+""positions"":""{B64(positions)}"",""colors"":""{B64(colors)}"",
+""normals"":null,""indices"":null}}]}}";
+
+            var payload = PolyforkMeshPayload.Parse(json);
+
+            Assert.AreEqual(1, payload.Meshes.Count);
+            Assert.AreEqual(3, payload.TotalVertices);
+            Assert.AreEqual(1, payload.TotalTriangles, "no index buffer means one triangle per three vertices");
+
+            var entry = payload.Meshes[0];
+            Assert.AreEqual(new Vector3(1f, 0f, 0f), entry.Positions[1]);
+            Assert.AreEqual(Color.green, entry.Colors[1]);
+            Assert.IsNull(entry.Indices, "Polyfork geometry is non-indexed, which is what keeps facets flat");
+        }
+
+        [Test]
+        public void EmptyPayloadIsHandledRatherThanThrowing()
+        {
+            Assert.AreEqual(0, PolyforkMeshPayload.Parse(null).Meshes.Count);
+            Assert.AreEqual(0, PolyforkMeshPayload.Parse("{}").Meshes.Count);
+            Assert.AreEqual(0, PolyforkMeshPayload.Parse(@"{""meshes"":[]}").Meshes.Count);
+        }
+
+        [Test]
         public void ShorthandHexExpandsCorrectly()
         {
             // #479 must mean #447799, not fail to parse. The catalogue uses this form.
