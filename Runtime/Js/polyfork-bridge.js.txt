@@ -32,6 +32,18 @@ globalThis.__polyfork = (function () {
     modules[id] = moduleExports;
   }
 
+  // Takes an asset module whose import/export statements have been rewritten by the host
+  // into plain script that builds __exports. Evaluating it in a function scope keeps each
+  // asset's declarations from colliding, and injects the one dependency they all share.
+  function registerSource(id, src) {
+    var factory = new Function('THREE', 'mergeGeometries', src + '\n;return __exports;');
+    var exports = factory(globalThis.THREE, globalThis.THREE.mergeGeometries);
+    if (!exports || typeof exports.createAsset !== 'function') {
+      throw new Error('module ' + id + ' exposes no createAsset');
+    }
+    modules[id] = exports;
+  }
+
   function has(id) {
     return !!modules[id];
   }
@@ -85,5 +97,11 @@ globalThis.__polyfork = (function () {
     return JSON.stringify({ meshes: meshes });
   }
 
-  return { register: register, has: has, bake: bake, describe: describe };
+  return {
+    register: register,
+    __registerSource: registerSource,
+    has: has,
+    bake: bake,
+    describe: describe
+  };
 })();

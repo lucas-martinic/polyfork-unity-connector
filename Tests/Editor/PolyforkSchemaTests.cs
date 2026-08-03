@@ -216,6 +216,55 @@ namespace Polyfork.Tests
         }
 
         [Test]
+        public void ModuleTransformDefersExportsToTheEnd()
+        {
+            // The bug this pins: assigning an export inline after its opening line lands the
+            // assignment inside a multi-line object literal, and the module fails to parse.
+            const string source = @"import * as THREE from 'three';
+export const params = {
+  tallness: { type: 'range', min: 0.7, max: 1.12 }
+};
+export function createAsset(p) { return null; }";
+
+            var script = PolyforkModuleTransform.ToScript(source);
+            var lines = script.Split('\n');
+
+            var openIndex = Array.FindIndex(lines, l => l.Contains("const params = {"));
+            Assert.Greater(openIndex, -1, "the declaration should survive with export stripped");
+
+            // Search after the declaration: the preamble `var __exports = {};` also ends "};".
+            var closeIndex = Array.FindIndex(lines, openIndex + 1, l => l.TrimEnd().EndsWith("};"));
+            var assignIndex = Array.FindIndex(lines, l => l.Contains("__exports.params = params;"));
+
+            Assert.Greater(closeIndex, openIndex, "the object literal should close after it opens");
+            Assert.Greater(assignIndex, closeIndex,
+                "the export assignment must come after the literal closes, not inside it");
+
+            StringAssert.DoesNotContain("import ", script, "imports are dropped; THREE is injected");
+            StringAssert.Contains("__exports.createAsset = createAsset;", script);
+        }
+
+        [Test]
+        public void ModuleTransformHandlesExportLists()
+        {
+            var script = PolyforkModuleTransform.ToScript("const A = 1; const B = 2;\nexport { A, B as Renamed };");
+
+            StringAssert.Contains("__exports.A = A;", script);
+            StringAssert.Contains("__exports.Renamed = B;", script);
+        }
+
+        [Test]
+        public void ModuleTransformFlagsUnsupportedImports()
+        {
+            // Only three is provided. Anything else should leave a trace rather than
+            // silently producing a module with an unbound identifier.
+            var script = PolyforkModuleTransform.ToScript("import { thing } from 'some-other-lib';\nexport const x = 1;");
+
+            StringAssert.Contains("dropped unsupported import", script);
+            StringAssert.DoesNotContain("some-other-lib", script.Replace("dropped unsupported import", ""));
+        }
+
+        [Test]
         public void MeshPayloadDecodesWhatTheBridgeProduces()
         {
             // One triangle, non-indexed, with vertex colours - the shape every Polyfork
