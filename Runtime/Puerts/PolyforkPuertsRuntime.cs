@@ -40,7 +40,11 @@ namespace Polyfork
             if (string.IsNullOrEmpty(bridgeScript))
                 throw new ArgumentException("The bake bridge is required.", nameof(bridgeScript));
 
-            _env = new JsEnv(new PolyforkEmptyLoader(), -1, BackendType.QuickJS, IntPtr.Zero, IntPtr.Zero);
+            // DefaultLoader, not a null one: Puerts resolves its own bootstrap scripts
+            // through the loader while constructing JsEnv, so a loader that answers nothing
+            // fails there before any of our code runs. We never ask it for anything
+            // ourselves - every script the connector runs is evaluated from a string.
+            _env = new JsEnv(new DefaultLoader(), -1, BackendType.QuickJS, IntPtr.Zero, IntPtr.Zero);
 
             // IL2CPP generates delegate wrappers ahead of time, so every signature crossing
             // the boundary has to be declared before it is used or the call fails on device.
@@ -119,20 +123,6 @@ globalThis.__btoa = function (input) {
             _env = null;
         }
 
-        /// <summary>
-        /// Everything is evaluated from strings the connector already holds, so there is no
-        /// filesystem to resolve against.
-        /// </summary>
-        sealed class PolyforkEmptyLoader : ILoader
-        {
-            public bool FileExists(string filepath) => false;
-
-            public string ReadFile(string filepath, out string debugpath)
-            {
-                debugpath = filepath;
-                return null;
-            }
-        }
     }
 }
 #endif

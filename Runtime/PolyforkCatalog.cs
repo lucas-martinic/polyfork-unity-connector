@@ -37,6 +37,14 @@ namespace Polyfork
                  "experience does not alternate between instant and round-tripped.")]
         [SerializeField] bool requireModule;
 
+        [Header("Local baking")]
+        [Tooltip("Run asset modules in-process when a JS engine is installed. Every knob becomes " +
+                 "live, nothing is metered, and a rebuild costs well under a millisecond instead " +
+                 "of a round trip. Turn off to force the server path for comparison.")]
+        [SerializeField] bool enableLocalBaking = true;
+
+        IPolyforkJsRuntime _jsRuntime;
+
         [Header("Prefetch")]
         [Tooltip("How many upcoming assets to download and parse ahead of time.")]
         [SerializeField, Range(1, 24)] int warmQueueSize = 8;
@@ -92,6 +100,8 @@ namespace Polyfork
             Bakers = new PolyforkBakerRegistry();
             Bakers.Register(new PolyforkServerBaker(Client, Loader, RemixBudget));
 
+            RegisterLocalBaker();
+
             Debug.Log(key != null
                 ? $"[Polyfork] API key {PolyforkCredentials.Redact(key)} from {keySource}."
                 : "[Polyfork] no API key; public previews only.");
@@ -105,6 +115,23 @@ namespace Polyfork
             }
 
             _cts = new CancellationTokenSource();
+        }
+
+        /// <summary>
+        /// Brings up local baking when a JS engine is installed, so assets whose module this
+        /// connection can fetch are rebuilt in-process: every knob live, nothing metered,
+        /// and no round trip. Anything else keeps using the server baker.
+        /// </summary>
+        void RegisterLocalBaker()
+        {
+            if (!enableLocalBaking || !PolyforkJsRuntimeProvider.IsAvailable) return;
+
+            _jsRuntime = PolyforkJsRuntimeProvider.TryCreate();
+            if (_jsRuntime == null) return;   // TryCreate already explained why
+
+            Bakers.Register(new PolyforkLocalBaker(_jsRuntime, Client));
+            Debug.Log($"[Polyfork] local baking active via {PolyforkJsRuntimeProvider.EngineName}; " +
+                      "assets with a fetchable module rebuild in-process.");
         }
 
         /// <summary>
@@ -172,6 +199,11 @@ namespace Polyfork
         {
             _cts?.Cancel();
             _cts?.Dispose();
+
+            // The engine owns native memory, so it has to be torn down explicitly rather
+            // than left to the GC.
+            _jsRuntime?.Dispose();
+            _jsRuntime = null;
         }
 
         /// <summary>Next asset in the rotation. Cycles forever.</summary>
