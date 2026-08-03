@@ -43,12 +43,50 @@ namespace Polyfork
         }
 
         /// <summary>
+        /// The uniform scale that would bring an instance's largest dimension to
+        /// <paramref name="targetSize"/> metres, without applying it.
+        ///
+        /// Polyfork publishes at true real-world metres, so a building is four metres tall
+        /// and a doorknob a few centimetres. Anything that animates localScale per frame
+        /// needs this as a factor rather than setting scale outright, or the asset snaps
+        /// back to life size - which, centred on a palm, looks like nothing rendered at all.
+        /// </summary>
+        public static float MeasureFitScale(GameObject instance, float targetSize)
+        {
+            var bounds = CalculateBounds(instance);
+            var largest = Mathf.Max(bounds.size.x, bounds.size.y, bounds.size.z);
+            if (largest <= Mathf.Epsilon) return 1f;
+
+            // CalculateBounds is world-space, so divide out any scale already applied.
+            var lossy = instance.transform.lossyScale;
+            var applied = Mathf.Max(Mathf.Abs(lossy.x), Mathf.Abs(lossy.y), Mathf.Abs(lossy.z));
+            if (applied <= Mathf.Epsilon) return 1f;
+
+            return targetSize / (largest / applied);
+        }
+
+        /// <summary>
+        /// Moves children so the instance is centred on its own transform.
+        ///
+        /// Assets are authored with the origin on the ground (minY = 0), which is right for
+        /// placing something on a floor and wrong for orbiting a point: uncentred, an asset
+        /// hangs below the ring by half its height.
+        /// </summary>
+        public static void CentreOnPivot(GameObject instance)
+        {
+            var bounds = CalculateBounds(instance);
+            if (bounds.size == Vector3.zero) return;
+
+            var offset = instance.transform.position - bounds.center;
+            foreach (Transform child in instance.transform) child.position += offset;
+        }
+
+        /// <summary>
         /// Uniformly scales an instance so its largest dimension is
         /// <paramref name="targetSize"/> metres, and recentres it on its own bounds.
         ///
-        /// Polyfork authors at true real-world scale with the origin on the ground
-        /// (minY = 0), which is right for a room but not for something held in a palm,
-        /// so the showcase rescales deliberately rather than by accident.
+        /// Only safe when nothing else writes localScale afterwards; use
+        /// <see cref="MeasureFitScale"/> when the scale is animated.
         /// </summary>
         public static Bounds FitToSize(GameObject instance, float targetSize, bool centre = true)
         {
