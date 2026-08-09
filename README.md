@@ -13,7 +13,7 @@ the asset's published schema at `/cdn/{id}-params.json`.
 
 ```jsonc
 // Packages/manifest.json
-"com.polyfork.connector": "https://github.com/<you>/polyfork-unity.git?path=/Packages/com.polyfork.connector",
+"com.polyfork.connector": "https://github.com/lucas-martinic/polyfork-unity.git?path=/Packages/com.polyfork.connector",
 "com.unity.cloud.gltfast": "6.19.0",
 "com.unity.nuget.newtonsoft-json": "3.2.2"
 ```
@@ -99,7 +99,7 @@ in `PolyforkParams.Classify` and they appear.
 
 ## Runtime API
 
-The same client works at play time — this is what the XR sample uses.
+The same client works at play time. `Samples~/RuntimeApi` is a runnable version of this.
 
 ```csharp
 var catalog = FindFirstObjectByType<PolyforkCatalog>();
@@ -117,6 +117,32 @@ at a time around the current values** (linear, 5–15 requests) rather than pref
 combinations, and re-warms after each rebuild. `PolyforkRemixBudget` keeps an
 unauthenticated session under the remix cap and degrades to the nearest cached variant
 instead of stalling on a 429.
+
+## Where geometry gets rebuilt
+
+Turning a range knob has to re-run the asset's generator. There are three ways to pay for
+that, and the connector ships all three because they suit different projects.
+
+| | Cost | Needs | Use when |
+| --- | --- | --- | --- |
+| **Server bake** (default) | One request, ~120 ms | Network, quota | Almost always. Nothing to install, exact results. |
+| **Vertex morph** | ~0.05 ms | Two server bakes up front | You want a slider to track the hand. Only works on topology-preserving knobs — 14 of 32 measured on the live catalogue. |
+| **Local bake** | ~41.5 ms on Quest 3 | A JS engine + ~343 KB payload | Offline, or you're past the hourly quota. |
+
+Morphing is the one most projects overlook:
+
+```csharp
+await remixable.MeasureMorphableKnobsAsync();
+if (remixable.IsMorphable("tallness")) {
+    // SetRange now interpolates between two bakes locally, per frame if you like
+}
+```
+
+Local baking runs the asset's own `createAsset()` module in-process via PuerTS/QuickJS.
+It is shipped as the optional **Local Baking** sample rather than in the package, because
+it carries a trimmed three.js build that would otherwise land in every consumer's player
+build whether or not they use it. Import it only if you need it — see that sample's README
+for the full trade-off.
 
 ## Types
 
@@ -137,7 +163,22 @@ instead of stalling on a 429.
   Don't rescale to fake a fit; pick a right-sized asset.
 - Requires **Linear** colour space so vertex-colour maths matches the authored hexes.
 
+## Samples
+
+Import from the package page in **Window ▸ Package Manager**.
+
+| Sample | What it does |
+| --- | --- |
+| **Runtime API** | Spawns an asset at play time and drives a knob from script |
+| **Local Baking** | Offline geometry rebuilds via PuerTS/QuickJS. Optional — read its README first |
+
 ## Licence
 
-The integration is yours to relicense. Asset files remain under the
-[Polyfork licence](https://polyfork.dev/licensing).
+The integration code is **MIT** — see [`LICENSE.md`](LICENSE.md).
+
+3D assets served by polyfork.dev are separate works under the
+[Polyfork asset licence](https://polyfork.dev/licensing); the MIT grant here does not
+extend to them.
+
+Redistributed third-party components are listed in
+[`Third Party Notices.md`](Third%20Party%20Notices.md).
