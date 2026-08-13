@@ -5,6 +5,16 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] - 2026-08-13
+
+### Changed
+
+- **The last bake's time is in the status bar**, reading `local · 34 ms`, with the split
+  between running the module and decoding its output in the tooltip. 0.4.1 only logged this
+  above 120 ms, which is useless for the actual complaint: "slower than it should feel" is
+  not a threshold, and a bake sitting at 80 ms would say nothing at all. The warning stays
+  for the genuinely slow ones.
+
 ## [0.5.1] - 2026-08-13
 
 ### Added

@@ -155,6 +155,9 @@ namespace Polyfork.EditorTools
         /// <summary>The JS engine, if one is installed. Owned by this window.</summary>
         IPolyforkJsRuntime _js;
 
+        /// <summary>Kept for its timings, which the status bar reports.</summary>
+        PolyforkLocalBaker _localBaker;
+
         void OnEnable()
         {
             _cts = new CancellationTokenSource();
@@ -168,7 +171,11 @@ namespace Polyfork.EditorTools
              * the registry then has only the server baker - which is exactly the old
              * behaviour, not a broken one. */
             _js = PolyforkJsRuntimeProvider.TryCreate();
-            if (_js != null) _bakers.Register(new PolyforkLocalBaker(_js, _client));
+            if (_js != null)
+            {
+                _localBaker = new PolyforkLocalBaker(_js, _client);
+                _bakers.Register(_localBaker);
+            }
             _thumbs = new PolyforkThumbnailCache(_client);
             _thumbs.Changed += Repaint;
             _preview = new PolyforkAssetPreview();
@@ -214,6 +221,7 @@ namespace Polyfork.EditorTools
             // accumulate quietly across a session until the editor started misbehaving.
             _js?.Dispose();
             _js = null;
+            _localBaker = null;
         }
 
         /// <summary>A newly saved key clears the limit and re-arms the client immediately.</summary>
@@ -1372,11 +1380,21 @@ namespace Polyfork.EditorTools
                 {
                     var style = new GUIStyle(EditorStyles.miniLabel);
                     style.normal.textColor = PolyforkBrand.Accent;
+                    /* The last bake's cost, on screen rather than in a log nobody opens.
+                     * The split is the useful part: engine time means the module is what is
+                     * slow, decode time means the payload crossing the JS boundary is. */
+                    var timing = _localBaker is { LastTotalMs: > 0d }
+                        ? $"local  ·  {_localBaker.LastTotalMs:0} ms"
+                        : "local bakes  ·  unmetered";
+
                     GUILayout.Label(
-                        new GUIContent($"local bakes - unmetered",
-                            $"Geometry is rebuilt here by {PolyforkJsRuntimeProvider.EngineName}: " +
-                            "instant, and it spends no allowance. The server allowance only " +
-                            "applies to assets whose module this connection cannot fetch."),
+                        new GUIContent(timing,
+                            _localBaker is { LastTotalMs: > 0d }
+                                ? $"Last bake: {_localBaker.LastEngineMs:0} ms running the module, " +
+                                  $"{_localBaker.LastDecodeMs:0} ms decoding {_localBaker.LastPayloadKb} KB. " +
+                                  "A server bake is about 120 ms and spends allowance."
+                                : $"Geometry is rebuilt here by {PolyforkJsRuntimeProvider.EngineName}: " +
+                                  "instant, and it spends no allowance."),
                         style);
                     GUILayout.Space(10f);
                 }

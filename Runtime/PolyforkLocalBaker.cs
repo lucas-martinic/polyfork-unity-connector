@@ -72,6 +72,23 @@ namespace Polyfork
         /// <summary>Above this, a local bake has stopped being the fast path and says so.</summary>
         const double SlowBakeMs = 120d;
 
+        /// <summary>
+        /// How long the last bake took, split into running the module and decoding what it
+        /// returned. Zero until one has run.
+        ///
+        /// Exposed rather than only logged because the log is threshold-based, and "slower
+        /// than it should feel" is not a threshold. A number on screen answers the question
+        /// without anyone having to reproduce the problem next to a console.
+        /// </summary>
+        public double LastEngineMs { get; private set; }
+
+        public double LastDecodeMs { get; private set; }
+
+        public double LastTotalMs => LastEngineMs + LastDecodeMs;
+
+        /// <summary>Size of the last payload crossing the JS boundary, in KB.</summary>
+        public int LastPayloadKb { get; private set; }
+
         public string Name => "local module";
 
         /// <summary>Above the server baker, which is priority 0.</summary>
@@ -124,6 +141,10 @@ namespace Polyfork
             /* A local bake is supposed to beat a ~120 ms round trip; when it does not, the
              * split says which half to look at. Silent above the threshold, so a working
              * setup never talks. */
+            LastEngineMs = bakeMs;
+            LastDecodeMs = decodeMs;
+            LastPayloadKb = payloadJson.Length / 1024;
+
             var totalMs = bakeMs + decodeMs;
             if (totalMs > SlowBakeMs)
             {
