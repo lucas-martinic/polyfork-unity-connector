@@ -1,6 +1,7 @@
 using System;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace Polyfork.EditorTools
 {
@@ -15,7 +16,12 @@ namespace Polyfork.EditorTools
         /// <summary>0xeceae6, the store viewer's background.</summary>
         public static readonly Color Background = new(0.925f, 0.918f, 0.902f, 1f);
 
+        /// <summary>A touch lighter than the background, so the model reads as standing on
+        /// something rather than floating in a void.</summary>
+        static readonly Color GroundColor = new(0.965f, 0.961f, 0.953f, 1f);
+
         PreviewRenderUtility _utility;
+        GameObject _ground;
         GameObject _target;
         Vector2 _orbit = new(25f, -25f);
         float _distance = 2.2f;
@@ -41,7 +47,10 @@ namespace Polyfork.EditorTools
             _utility.lights[0].intensity = 1.5f;
             _utility.lights[0].transform.rotation = Quaternion.LookRotation(new Vector3(-4f, -7f, -5f));
             _utility.lights[0].shadows = LightShadows.Soft;
-            _utility.lights[0].shadowStrength = 0.35f;
+            _utility.lights[0].shadowStrength = 0.32f;   // ShadowMaterial opacity 0.18 on the web, plus ambient
+            _utility.lights[0].shadowBias = 0.005f;      // the ground is a big flat plane: prime acne territory
+            _utility.lights[0].shadowNormalBias = 0.05f;
+            _utility.lights[0].shadowResolution = UnityEngine.Rendering.LightShadowResolution.VeryHigh;
 
             // rim: 0xdfe8ff at 0.9, from (-5, 4, -6)
             _utility.lights[1].color = new Color(0.874f, 0.910f, 1f);
@@ -76,6 +85,9 @@ namespace Polyfork.EditorTools
 
             _bounds = PolyforkSpawner.CalculateBounds(_target);
 
+            EnsureGround();
+            PlaceGround();
+
             if (frameCamera || !hadTarget) Frame();
         }
 
@@ -84,6 +96,62 @@ namespace Polyfork.EditorTools
         {
             var size = Mathf.Max(_bounds.size.x, _bounds.size.y, _bounds.size.z);
             _distance = Mathf.Max(0.4f, size * 2.6f);
+        }
+
+        /// <summary>
+        /// The pale ground the model sits on, and what its shadow lands on.
+        ///
+        /// Stock shader on purpose. Receiving a shadow is the one thing that differs hard
+        /// between the built-in pipeline and URP - the sampling is not portable - so the
+        /// plane uses whichever lit shader the project's pipeline already ships, and gets it
+        /// right for free. The model needs our own shader because it needs vertex colours;
+        /// the ground needs neither.
+        /// </summary>
+        void EnsureGround()
+        {
+            if (_ground != null) return;
+
+            _ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            _ground.name = "Polyfork Ground";
+            _ground.hideFlags = HideFlags.HideAndDontSave;
+
+            // A collider in a preview scene is dead weight and can be picked up by physics
+            // queries running elsewhere in the editor.
+            var collider = _ground.GetComponent<Collider>();
+            if (collider != null) UnityEngine.Object.DestroyImmediate(collider);
+
+            var urp = GraphicsSettings.currentRenderPipeline != null;
+            var shader = (urp ? Shader.Find("Universal Render Pipeline/Lit") : null)
+                         ?? Shader.Find("Standard")
+                         ?? Shader.Find("Diffuse");
+
+            var material = new Material(shader) { name = "Polyfork Ground", hideFlags = HideFlags.HideAndDontSave };
+            if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", GroundColor);
+            if (material.HasProperty("_Color")) material.SetColor("_Color", GroundColor);
+            if (material.HasProperty("_Glossiness")) material.SetFloat("_Glossiness", 0f);
+            if (material.HasProperty("_Smoothness")) material.SetFloat("_Smoothness", 0f);
+
+            var renderer = _ground.GetComponent<MeshRenderer>();
+            renderer.sharedMaterial = material;
+            renderer.receiveShadows = true;
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+
+            _utility.AddSingleGO(_ground);
+        }
+
+        /// <summary>Sits the ground under the model, wide enough to catch the shadow.</summary>
+        void PlaceGround()
+        {
+            if (_ground == null) return;
+
+            var span = Mathf.Max(_bounds.size.x, _bounds.size.z, 0.2f);
+
+            // The primitive plane is 10 units across, hence the tenth.
+            _ground.transform.localScale = Vector3.one * (span * 6f / 10f);
+            _ground.transform.position = new Vector3(
+                _bounds.center.x,
+                _bounds.min.y - span * 0.002f,   // just below, so it does not z-fight the model
+                _bounds.center.z);
         }
 
         public void Clear()
@@ -170,6 +238,13 @@ namespace Polyfork.EditorTools
         public void Dispose()
         {
             Clear();
+
+            if (_ground != null)
+            {
+                UnityEngine.Object.DestroyImmediate(_ground);
+                _ground = null;
+            }
+
             _utility?.Cleanup();
             _utility = null;
         }

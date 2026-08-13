@@ -105,6 +105,40 @@ namespace Polyfork.EditorTools
 
         /// <summary>Rate limiting only blocks work that would actually leave the machine.</summary>
         bool BlockedByAllowance => IsRateLimited && MeteredFor(_selected);
+
+        /// <summary>
+        /// What can be turned on THIS asset, by whichever baker would serve it.
+        ///
+        /// PolyforkKnob.Support describes the server, and the server bakes only knobs marked
+        /// `affects: geometry` - a missing `affects` reads as `colors` on its side. A local
+        /// baker runs the asset's own module and honours whatever the module declares, so
+        /// reading the static classification hid working controls: Large Coastal Boulder's
+        /// `dampLine` is a range with no `affects`, unbakeable remotely and perfectly
+        /// turnable locally.
+        ///
+        /// Colours are exempt. They are applied in place on the mesh either way, and that is
+        /// not the baker's decision to make.
+        /// </summary>
+        PolyforkKnobSupport SupportFor(PolyforkKnob knob)
+        {
+            if (knob == null) return PolyforkKnobSupport.Unsupported;
+            if (knob.Support == PolyforkKnobSupport.LocalRecolor) return PolyforkKnobSupport.LocalRecolor;
+
+            var baker = _selected != null && _schema != null ? _bakers.Resolve(_selected, _schema) : null;
+            return baker?.Supports(knob) ?? knob.Support;
+        }
+
+        /// <summary>Knobs worth drawing, ordered as the detail panel wants them.</summary>
+        IEnumerable<PolyforkKnob> UsableKnobs()
+        {
+            if (_schema == null) return Enumerable.Empty<PolyforkKnob>();
+
+            return _schema.All
+                .Where(k => SupportFor(k) != PolyforkKnobSupport.Unsupported)
+                .OrderBy(k => SupportFor(k) == PolyforkKnobSupport.LocalRecolor ? 0 : 1)
+                .ThenBy(k => k.Type == PolyforkKnobType.Choice ? 0 : 1)
+                .ThenBy(k => k.Name, StringComparer.Ordinal);
+        }
         string _importMessage;
         MessageType _importMessageType = MessageType.Info;
         string _importFolder = PolyforkAssetImporter.DefaultFolder;
@@ -341,7 +375,7 @@ namespace Polyfork.EditorTools
 
             foreach (var knob in _schema.All)
             {
-                switch (knob.Support)
+                switch (SupportFor(knob))
                 {
                     case PolyforkKnobSupport.ServerRebuild when knob.Type == PolyforkKnobType.Choice:
                         _choices[knob.Name] = knob.DefaultString ?? knob.Options.FirstOrDefault();
@@ -884,7 +918,7 @@ namespace Polyfork.EditorTools
             /* Browsing and remixing are separate jobs, so the panel beside the grid stays a
              * preview and the knobs get a screen of their own. Only offered when the asset
              * has something to turn. */
-            using (new EditorGUI.DisabledScope(_schema == null || !_schema.Remixable.Any()))
+            using (new EditorGUI.DisabledScope(_schema == null || !UsableKnobs().Any()))
             {
                 if (GUILayout.Button("Remix this asset", PolyforkLocalBakingWindow.PrimaryButton,
                         GUILayout.Height(32f)))
@@ -895,12 +929,67 @@ namespace Polyfork.EditorTools
             }
 
             EditorGUILayout.Space(4f);
-            DrawKnobs();
+            DrawKnobSummary();
 
             EditorGUILayout.Space(8f);
             DrawImportSection();
 
             EditorGUILayout.EndScrollView();
+        }
+
+        /// <summary>
+        /// What this asset can be changed into, without offering to change it here.
+        ///
+        /// Live sliders beside the grid were a trap: every drag is a rebuild, in a panel too
+        /// narrow to see the result, while the thing you were doing was browsing. The list
+        /// says what is on offer; the remix screen is where you turn it.
+        /// </summary>
+        void DrawKnobSummary()
+        {
+            if (_schema == null)
+            {
+                EditorGUILayout.LabelField(
+                    _selected.Remixable ? "Loading knobs..." : "No remix knobs on this asset.",
+                    EditorStyles.miniLabel);
+                return;
+            }
+
+            var knobs = UsableKnobs().ToList();
+            if (knobs.Count == 0)
+            {
+                EditorGUILayout.LabelField("No knobs on this asset can be applied here.", EditorStyles.miniLabel);
+                return;
+            }
+
+            EditorGUILayout.LabelField($"{knobs.Count} knobs", EditorStyles.boldLabel);
+
+            foreach (var knob in knobs)
+            {
+                var what = knob.Type switch
+                {
+                    PolyforkKnobType.Range => knob.IsIntegral
+                        ? $"{knob.Min:0}-{knob.Max:0}"
+                        : $"{knob.Min:0.##} to {knob.Max:0.##}",
+                    PolyforkKnobType.Choice => $"{knob.Options.Count} options",
+                    PolyforkKnobType.Toggle => "on / off",
+                    PolyforkKnobType.Color => "colour",
+                    _ => ""
+                };
+
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    EditorGUILayout.LabelField(new GUIContent(knob.Label, knob.Describe), EditorStyles.miniLabel);
+                    GUILayout.FlexibleSpace();
+                    GUILayout.Label(what, EditorStyles.centeredGreyMiniLabel);
+                }
+            }
+
+            var hidden = _schema.All.Count(k => SupportFor(k) == PolyforkKnobSupport.Unsupported);
+            if (hidden > 0)
+            {
+                EditorGUILayout.LabelField(
+                    $"{hidden} more cannot be applied from a GLB.", EditorStyles.centeredGreyMiniLabel);
+            }
         }
 
         void DrawKnobs()
@@ -913,7 +1002,7 @@ namespace Polyfork.EditorTools
                 return;
             }
 
-            var knobs = _schema.Remixable.ToList();
+            var knobs = UsableKnobs().ToList();
             if (knobs.Count == 0)
             {
                 EditorGUILayout.HelpBox("No knobs on this asset can be applied here.", MessageType.None);
@@ -926,7 +1015,7 @@ namespace Polyfork.EditorTools
             {
                 switch (knob.Type)
                 {
-                    case PolyforkKnobType.Choice when knob.Support == PolyforkKnobSupport.LocalRecolor:
+                    case PolyforkKnobType.Choice when SupportFor(knob) == PolyforkKnobSupport.LocalRecolor:
                         DrawColorwayKnob(knob);
                         break;
                     case PolyforkKnobType.Choice: DrawChoiceKnob(knob); break;
@@ -936,7 +1025,7 @@ namespace Polyfork.EditorTools
                 }
             }
 
-            var hidden = _schema.All.Count(k => !k.IsSupported);
+            var hidden = _schema.All.Count(k => SupportFor(k) == PolyforkKnobSupport.Unsupported);
             if (hidden > 0)
             {
                 EditorGUILayout.Space(2f);

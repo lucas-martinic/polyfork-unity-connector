@@ -5,6 +5,34 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-08-13
+
+### Added
+
+- **Real-time shadows and a ground plane**, matching the store viewer: the model casts a soft
+  shadow onto a pale plane sitting at its base. The shader gained a `ShadowCaster` pass —
+  without one a mesh is never drawn into the shadow map, whatever the light is told to do,
+  and URP looks for the same tag so one pass serves both pipelines. The plane deliberately
+  uses whichever stock lit shader the project's pipeline ships, because *receiving* a shadow
+  is the one thing that does not port between built-in and URP.
+
+### Fixed
+
+- **Knobs a local bake could honour were still hidden.** The gallery read
+  `PolyforkKnob.Support`, which describes the *server* — and the server bakes only knobs
+  marked `affects: geometry`, treating a missing `affects` as `colors`. A local baker runs
+  the asset's own module and honours whatever that module declares.
+
+  Large Coastal Boulder's `dampLine` is exactly this: a range knob with no `affects`, which
+  the endpoint will not bake and the module turns perfectly well. The UI now asks the baker
+  that would actually serve the asset, which is what `IPolyforkBaker.Supports` was for.
+
+### Changed
+
+- **The gallery panel lists what can be changed instead of offering to change it.** Live
+  sliders beside the grid were a trap: every drag is a rebuild, shown in a panel too narrow
+  to judge, while the thing you were doing was browsing. The knobs live on the remix screen.
+
 ## [0.5.0] - 2026-08-13
 
 ### Added

@@ -70,6 +70,50 @@ Shader "Polyfork/Vertex Color"
             }
             ENDCG
         }
+
+        /* Without this the model casts no shadow at all, whatever the light is told to do:
+         * a mesh is only drawn into the shadow map by a pass tagged ShadowCaster, and the
+         * colour pass above is not one. URP looks for the same tag, which is what lets one
+         * pass serve both pipelines. */
+        Pass
+        {
+            Name "ShadowCaster"
+            Tags { "LightMode" = "ShadowCaster" }
+
+            ZWrite On
+            ZTest LEqual
+            Cull Back
+
+            CGPROGRAM
+            #pragma vertex shadowVert
+            #pragma fragment shadowFrag
+            #pragma multi_compile_shadowcaster
+            #include "UnityCG.cginc"
+
+            struct shadowIn
+            {
+                float4 vertex : POSITION;
+                float3 normal : NORMAL;
+            };
+
+            struct shadowOut
+            {
+                V2F_SHADOW_CASTER;
+            };
+
+            shadowOut shadowVert (shadowIn v)
+            {
+                shadowOut o;
+                TRANSFER_SHADOW_CASTER_NORMALOFFSET(o)
+                return o;
+            }
+
+            float4 shadowFrag (shadowOut i) : SV_Target
+            {
+                SHADOW_CASTER_FRAGMENT(i)
+            }
+            ENDCG
+        }
     }
 
     Fallback "Unlit/Color"
