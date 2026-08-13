@@ -112,21 +112,41 @@ namespace Polyfork
         public string Describe(string moduleId)
             => IsReady ? _describe(moduleId) : null;
 
-        /// <summary>QuickJS ships no btoa, and the bridge needs one for its typed arrays.</summary>
+        /// <summary>
+        /// QuickJS ships no btoa, and the bridge needs one for its typed arrays.
+        ///
+        /// Written against a chunked array rather than by appending to a string. The obvious
+        /// version does four `out +=` per three bytes, which for a mesh is tens of thousands
+        /// of appends and is the kind of thing an interpreter without rope strings charges
+        /// full price for. A mesh is the whole payload here, so this sits directly on how
+        /// long a local bake takes.
+        /// </summary>
         const string Base64Polyfill = @"
 globalThis.__btoa = function (input) {
   var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-  var out = '', i = 0;
-  while (i < input.length) {
-    var c1 = input.charCodeAt(i++) & 0xff;
-    var c2 = input.charCodeAt(i++) & 0xff;
-    var c3 = input.charCodeAt(i++) & 0xff;
-    out += chars.charAt(c1 >> 2);
-    out += chars.charAt(((c1 & 3) << 4) | (c2 >> 4));
-    out += isNaN(c2) ? '=' : chars.charAt(((c2 & 15) << 2) | (c3 >> 6));
-    out += isNaN(c3) ? '=' : chars.charAt(c3 & 63);
+  var len = input.length;
+  var parts = [];
+  var buf = new Array(4096);
+  var n = 0;
+
+  for (var i = 0; i < len; i += 3) {
+    var c1 = input.charCodeAt(i) & 0xff;
+    var has2 = i + 1 < len, has3 = i + 2 < len;
+    var c2 = has2 ? input.charCodeAt(i + 1) & 0xff : 0;
+    var c3 = has3 ? input.charCodeAt(i + 2) & 0xff : 0;
+
+    buf[n++] = chars.charAt(c1 >> 2);
+    buf[n++] = chars.charAt(((c1 & 3) << 4) | (c2 >> 4));
+    buf[n++] = has2 ? chars.charAt(((c2 & 15) << 2) | (c3 >> 6)) : '=';
+    buf[n++] = has3 ? chars.charAt(c3 & 63) : '=';
+
+    // Flush a chunk at a time: one join of 4096 beats 4096 appends, and keeps the
+    // intermediate array from growing to the size of the mesh.
+    if (n === 4096) { parts.push(buf.join('')); n = 0; }
   }
-  return out;
+
+  if (n > 0) parts.push(buf.slice(0, n).join(''));
+  return parts.join('');
 };";
 
         public void Dispose()

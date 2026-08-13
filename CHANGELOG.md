@@ -5,6 +5,26 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-08-13
+
+### Fixed
+
+- **Locally baked models rendered grey.** All of a Polyfork asset's colour lives in `COLOR_0`
+  — one material, no textures — and Unity's stock shaders discard vertex colour. `URP/Lit`,
+  `URP/Simple Lit` and `Standard` all do. The `.glb` path looked right because glTFast
+  supplies its own vertex-colour material; the local path had nothing equivalent, so it fell
+  back to a shader that threw the colour away.
+
+  The package now ships `Polyfork/Vertex Color`, a plain vertex/fragment shader that draws
+  under both the built-in pipeline and URP. It stays out of player builds like the rest of
+  local baking. The stock shaders remain a fallback, and now log a warning saying the model
+  will look grey rather than leaving you to work it out.
+- **Local bakes were slow.** The base64 bridge appended to a string four times per three
+  bytes — tens of thousands of appends for a mesh, which an interpreter without rope strings
+  charges full price for. It builds through a chunked array now.
+- Bakes slower than 120 ms log the split between engine time and decode time, so the next
+  slow one says which half to look at. Silent otherwise.
+
 ## [0.4.0] - 2026-08-13
 
 ### Fixed

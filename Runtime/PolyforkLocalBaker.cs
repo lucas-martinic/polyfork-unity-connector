@@ -69,6 +69,9 @@ namespace Polyfork
             _materialFactory = materialFactory;
         }
 
+        /// <summary>Above this, a local bake has stopped being the fast path and says so.</summary>
+        const double SlowBakeMs = 120d;
+
         public string Name => "local module";
 
         /// <summary>Above the server baker, which is priority 0.</summary>
@@ -103,14 +106,32 @@ namespace Polyfork
 
             // Send only what differs from the defaults; the module fills the rest in itself.
             var values = request.Values.WithoutDefaults(request.Schema);
+
+            var watch = System.Diagnostics.Stopwatch.StartNew();
             var payloadJson = _runtime.Bake(request.Asset.Id, values.ToString());
+            var bakeMs = watch.Elapsed.TotalMilliseconds;
 
             if (string.IsNullOrEmpty(payloadJson))
                 throw new PolyforkBakeUnavailableException($"The module for {request.Asset.Id} produced nothing.");
 
+            watch.Restart();
             var payload = PolyforkMeshPayload.Parse(payloadJson);
+            var decodeMs = watch.Elapsed.TotalMilliseconds;
+
             if (payload.Meshes.Count == 0)
                 throw new PolyforkBakeUnavailableException($"The module for {request.Asset.Id} produced no meshes.");
+
+            /* A local bake is supposed to beat a ~120 ms round trip; when it does not, the
+             * split says which half to look at. Silent above the threshold, so a working
+             * setup never talks. */
+            var totalMs = bakeMs + decodeMs;
+            if (totalMs > SlowBakeMs)
+            {
+                Debug.LogWarning(
+                    $"[Polyfork] local bake of {request.Asset.Id} took {totalMs:0} ms " +
+                    $"({bakeMs:0} ms in the engine, {decodeMs:0} ms decoding " +
+                    $"{payloadJson.Length / 1024} KB). A server bake is about 120 ms.");
+            }
 
             return payload.ToGameObject(CreateMaterial(), request.Parent, $"Polyfork_{request.Asset.Id}");
         }
@@ -160,11 +181,31 @@ namespace Polyfork
         {
             if (_materialFactory != null) return _materialFactory();
 
-            // Polyfork assets are flat-shaded with baked vertex colours and no textures, so
-            // the material only has to multiply base colour by the vertex colour.
-            var shader = Shader.Find("Universal Render Pipeline/Simple Lit")
+            /* A Polyfork asset keeps ALL of its colour in COLOR_0 - one material, no
+             * textures - and Unity's stock shaders discard vertex colour. URP/Lit,
+             * URP/Simple Lit and Standard all do, which is why a locally baked asset came
+             * out grey while the same asset fetched as a .glb looked right: glTFast supplies
+             * its own vertex-colour material and this path had nothing equivalent.
+             *
+             * So the package ships one. The stock shaders stay as a fallback, on the grounds
+             * that a grey model is better than a magenta one. */
+            var shader = Shader.Find("Polyfork/Vertex Color")
+                         ?? Shader.Find("Universal Render Pipeline/Simple Lit")
                          ?? Shader.Find("Universal Render Pipeline/Lit")
                          ?? Shader.Find("Standard");
+
+            if (shader == null)
+            {
+                Debug.LogWarning("[Polyfork] no usable shader was found for locally baked meshes.");
+                return null;
+            }
+
+            if (shader.name != "Polyfork/Vertex Color")
+            {
+                Debug.LogWarning(
+                    $"[Polyfork] falling back to '{shader.name}' for locally baked meshes, which ignores " +
+                    "vertex colours - the model will look grey. Polyfork/Vertex Color was not found.");
+            }
 
             var material = new Material(shader) { name = "Polyfork Vertex Colour" };
             if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", Color.white);
