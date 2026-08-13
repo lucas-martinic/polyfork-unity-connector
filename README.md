@@ -15,7 +15,7 @@ The [Polyfork](https://polyfork.dev) store, inside the editor. Browse the catalo
 the same knobs the web viewer exposes, watch the model rebuild, and drop it into your
 project as a `.glb` — with your colours baked in.
 
-> **Window ▸ Polyfork ▸ Browse Assets** &nbsp;·&nbsp; `Ctrl/Cmd + Shift + P`
+> **Polyfork ▸ Browse Assets** &nbsp;·&nbsp; `Ctrl/Cmd + Shift + P`
 
 Nothing here invents a parameter. Every label, range, option and palette entry is read from
 the asset's published schema at `/cdn/{id}-params.json`.
@@ -38,6 +38,19 @@ Or by hand, which also lets you pin a version with `#v0.2.0`:
 ```
 
 Unity 6000.0 or newer. The two dependencies are resolved from Unity's own registry.
+
+## Menu
+
+```
+Polyfork ▸ Browse Assets                          Ctrl/Cmd + Shift + P
+Polyfork ▸ API Key…
+Polyfork ▸ Welcome
+Polyfork ▸ Diagnostics ▸ Smoke-test local baking  (needs the Local Baking sample)
+```
+
+The gallery is also under **Window ▸ Polyfork**, where Unity users tend to look for a
+window. The welcome screen opens by itself the first time a project imports the package;
+you do not need a key to get past it, and it says so.
 
 ## The gallery
 

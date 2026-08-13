@@ -27,6 +27,7 @@ namespace Polyfork.EditorTools
             window._retryAfter = retryAfter;
         }
 
+        [MenuItem("Polyfork/API Key…", priority = 1)]
         [MenuItem("Window/Polyfork/API Key…", priority = 1101)]
         public static PolyforkApiKeyWindow Open()
         {

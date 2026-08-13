@@ -20,8 +20,13 @@ namespace Polyfork.EditorTools
     {
         const string FreeAssetId = "street-lamp-29f365";
 
-        [MenuItem("Polyfork/4. Smoke-test local baking", priority = 40)]
+        [MenuItem("Polyfork/Diagnostics/Smoke-test local baking", priority = 100)]
         public static void Run() => _ = RunAsync();
+
+        /// <summary>Greyed out unless a JS engine is actually installed, so the menu does not
+        /// offer to test something this project cannot do.</summary>
+        [MenuItem("Polyfork/Diagnostics/Smoke-test local baking", validate = true)]
+        static bool CanRun() => PolyforkJsRuntimeProvider.IsAvailable;
 
         public static async Task RunAsync()
         {

@@ -5,6 +5,38 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-08-13
+
+### Fixed
+
+- **The menu made the package look broken.** The gallery lived under
+  `Window ▸ Polyfork ▸ Browse Assets`, while the local-baking smoke test created its own
+  top-level `Polyfork` menu — so the only entry under `Polyfork` was
+  `4. Smoke-test local baking`, step 4 of a numbered workflow whose steps 1-3 lived in the
+  XR showcase and left with it. Everything now sits under one `Polyfork` menu:
+
+  ```
+  Polyfork ▸ Browse Assets            (Ctrl/Cmd + Shift + P, also under Window ▸ Polyfork)
+  Polyfork ▸ API Key…
+  Polyfork ▸ Welcome
+  Polyfork ▸ Diagnostics ▸ Smoke-test local baking
+  ```
+
+  The smoke test is greyed out unless a JS engine is actually installed, rather than
+  offering to test something the project cannot do.
+
+### Added
+
+- **A welcome window**, shown once per project on first import and reopenable from
+  `Polyfork ▸ Welcome`. It answers the question a new user actually has — *do I need an
+  account?* — with **Add an API key** and **Continue free** side by side, since browsing,
+  previewing and importing all work with no key at all.
+
+  The allowance it quotes is read live from `GET /api/me`, not written into the window, for
+  the same reason the knobs are read from the schema: those numbers belong to the server,
+  and a hardcoded "40 an hour" becomes wrong the first time pricing moves. It stays quiet in
+  batch mode, so a CI run cannot hang on a modal nobody is there to click.
+
 ## [0.2.1] - 2026-08-13
 
 ### Fixed

@@ -20,7 +20,9 @@ namespace Polyfork.EditorTools
         const float CardSize = 118f;
         const float CardPadding = 8f;
 
-        [MenuItem("Window/Polyfork/Browse Assets %#p", priority = 1100)]
+        [MenuItem("Polyfork/Browse Assets %#p", priority = 0)]
+        // Also under Window, because that is where Unity users look for a window.
+        [MenuItem("Window/Polyfork/Browse Assets", priority = 1100)]
         public static void Open()
         {
             var window = GetWindow<PolyforkGalleryWindow>();
