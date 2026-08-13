@@ -40,35 +40,53 @@ namespace Polyfork
             if (string.IsNullOrEmpty(bridgeScript))
                 throw new ArgumentException("The bake bridge is required.", nameof(bridgeScript));
 
-            // DefaultLoader, not a null one: Puerts resolves its own bootstrap scripts
-            // through the loader while constructing JsEnv, so a loader that answers nothing
-            // fails there before any of our code runs. We never ask it for anything
-            // ourselves - every script the connector runs is evaluated from a string.
-            _env = new JsEnv(new DefaultLoader(), -1, BackendType.QuickJS, IntPtr.Zero, IntPtr.Zero);
+            /* Each step is named so a failure says which one broke. Puerts reports a null
+             * script as "String reference not set to an instance of a String. Parameter
+             * name: s" - that is Encoding.UTF8.GetBytes(chunk) inside ScriptEnv.Eval - and
+             * on its own that message identifies neither the script nor the step. */
+            var step = "creating the QuickJS environment";
+            try
+            {
+                // DefaultLoader, not a null one: Puerts hands the loader to its backend, and
+                // a loader that answers nothing can fail inside native before our code runs.
+                // We never ask it for anything ourselves - every script the connector runs is
+                // evaluated from a string.
+                _env = new JsEnv(new DefaultLoader(), -1, BackendType.QuickJS, IntPtr.Zero, IntPtr.Zero);
 
-            // IL2CPP generates delegate wrappers ahead of time, so every signature crossing
-            // the boundary has to be declared before it is used or the call fails on device.
-            _env.UsingFunc<string, string, string>();
-            _env.UsingFunc<string, string>();
-            _env.UsingFunc<string, bool>();
-            _env.UsingAction<string, string>();
+                // QuickJS has no btoa; the bridge base64-encodes its buffers with it.
+                step = "evaluating the base64 polyfill";
+                _env.Eval(Base64Polyfill, "polyfork-base64.js");
 
-            // QuickJS has no btoa; the bridge base64-encodes its buffers with it.
-            _env.Eval(Base64Polyfill, "polyfork-base64.js");
+                // The bundle is built as an IIFE assigning `var THREE`, so it needs no
+                // rewriting - only promotion to globalThis, since `var` at eval scope is not
+                // guaranteed to land there.
+                step = $"evaluating three.js ({threeBundle.Length} chars)";
+                _env.Eval(threeBundle, "three-trimmed.js");
 
-            // The bundle is built as an IIFE assigning `var THREE`, so it needs no rewriting -
-            // only promotion to globalThis, since `var` at eval scope is not guaranteed to
-            // land there. Bundling as ESM instead would have meant parsing export-list syntax.
-            _env.Eval(threeBundle, "three-trimmed.js");
-            _env.Eval("globalThis.THREE = THREE;", "three-global.js");
+                step = "promoting THREE to globalThis";
+                _env.Eval("globalThis.THREE = THREE;", "three-global.js");
 
-            _env.Eval(bridgeScript, "polyfork-bridge.js");
+                step = $"evaluating the bake bridge ({bridgeScript.Length} chars)";
+                _env.Eval(bridgeScript, "polyfork-bridge.js");
 
-            _bake = _env.Eval<Func<string, string, string>>("__polyfork.bake");
-            _describe = _env.Eval<Func<string, string>>("__polyfork.describe");
-            _has = _env.Eval<Func<string, bool>>("__polyfork.has");
-            _register = _env.Eval<Action<string, string>>(
-                "(function(id, src){ globalThis.__polyfork.__registerSource(id, src); })");
+                step = "binding __polyfork.bake";
+                _bake = _env.Eval<Func<string, string, string>>("__polyfork.bake");
+
+                step = "binding __polyfork.describe";
+                _describe = _env.Eval<Func<string, string>>("__polyfork.describe");
+
+                step = "binding __polyfork.has";
+                _has = _env.Eval<Func<string, bool>>("__polyfork.has");
+
+                step = "binding __polyfork.__registerSource";
+                _register = _env.Eval<Action<string, string>>(
+                    "(function(id, src){ globalThis.__polyfork.__registerSource(id, src); })");
+            }
+            catch (Exception e)
+            {
+                // Named, and with the original attached rather than flattened to its message.
+                throw new InvalidOperationException($"failed while {step}: {e.Message}", e);
+            }
 
             Debug.Log("[Polyfork] QuickJS runtime ready.");
         }

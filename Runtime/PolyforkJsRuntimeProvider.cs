@@ -71,8 +71,13 @@ namespace Polyfork
             }
             catch (Exception e)
             {
-                Debug.LogWarning($"[Polyfork] {EngineName ?? "JS"} runtime failed to start ({e.Message}); " +
-                                 "falling back to server baking.");
+                /* The whole exception, not e.Message. Falling back to the server means this
+                 * is only ever a warning, and a warning that has thrown its stack away turns
+                 * a one-line diagnosis into an afternoon: the message alone cannot say which
+                 * script, which step, or which frame. */
+                Debug.LogWarning(
+                    $"[Polyfork] {EngineName ?? "JS"} runtime failed to start; falling back to " +
+                    $"server baking. Geometry still rebuilds, just on polyfork.dev.\n{e}");
                 return null;
             }
         }

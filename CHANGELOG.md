@@ -5,6 +5,27 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.6] - 2026-08-13
+
+### Fixed
+
+- **A failing JS runtime reported almost nothing.** The warning logged `e.Message` and
+  discarded the stack, so a real report read only
+
+  ```
+  QuickJS runtime failed to start (String reference not set to an instance of a String.
+  Parameter name: s)
+  ```
+
+  which names neither the script nor the step. That message is
+  `Encoding.UTF8.GetBytes(chunk)` inside PuerTS's `ScriptEnv.Eval` — something evaluated a
+  **null script** — but nothing said which one. The full exception is logged now, and
+  `PolyforkPuertsRuntime.Initialise` labels each step, so a failure names it: creating the
+  environment, evaluating three.js, binding `__polyfork.bake`, and so on, with the script
+  lengths included.
+- Dropped the `UsingFunc`/`UsingAction` pre-registration calls, which are empty methods in
+  PuerTS 3.x and only mattered for IL2CPP ahead-of-time wrappers on device.
+
 ## [0.3.5] - 2026-08-13
 
 ### Fixed
