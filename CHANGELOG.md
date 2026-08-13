@@ -40,6 +40,11 @@ knobs since 0.1.0, and this release stops hiding them.
 
 ### Changed
 
+- **The package has its own repo.** It used to live in a subfolder of
+  `lucas-martinic/polyfork-unity`, whose root was a Unity project, so installing meant
+  `…/polyfork-unity.git?path=/Packages/com.polyfork.connector`. It is now
+  `https://github.com/lucas-martinic/polyfork-unity-connector.git`, with no query string.
+  The old URL will stop resolving: that repo is private and archived.
 - `PolyforkAssetImporter.ImportAsync` takes `PolyforkKnobValues` instead of a
   `Dictionary<string, float>`, so it can carry choice and toggle values.
 - `PolyforkServerBaker.Supports` now defers to `PolyforkParams`' classification instead of

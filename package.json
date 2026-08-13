@@ -9,9 +9,9 @@
     "name": "Polyfork",
     "url": "https://polyfork.dev"
   },
-  "documentationUrl": "https://github.com/lucas-martinic/polyfork-unity/blob/main/Packages/com.polyfork.connector/README.md",
-  "changelogUrl": "https://github.com/lucas-martinic/polyfork-unity/blob/main/Packages/com.polyfork.connector/CHANGELOG.md",
-  "licensesUrl": "https://github.com/lucas-martinic/polyfork-unity/blob/main/Packages/com.polyfork.connector/LICENSE.md",
+  "documentationUrl": "https://github.com/lucas-martinic/polyfork-unity-connector/blob/main/README.md",
+  "changelogUrl": "https://github.com/lucas-martinic/polyfork-unity-connector/blob/main/CHANGELOG.md",
+  "licensesUrl": "https://github.com/lucas-martinic/polyfork-unity-connector/blob/main/LICENSE.md",
   "keywords": [
     "polyfork",
     "3d",

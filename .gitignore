@@ -1,0 +1,30 @@
+# ---- Secrets -------------------------------------------------------------
+# Polyfork API keys must never be committed. See PolyforkCredentials.
+polyfork.key
+**/polyfork.key
+*.key.txt
+.env
+
+# Local MCP server registration. Machine-specific absolute paths (and, for HTTP
+# servers, auth headers) — not portable, and not something a consumer of this
+# package should inherit.
+.mcp.json
+
+# ---- Unity ---------------------------------------------------------------
+# This repo is a package, not a project, so most Unity noise cannot appear here.
+# These stay in case someone opens a host project in place while iterating.
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+
+# Test output
+results.xml
+
+# ---- OS / editor ---------------------------------------------------------
+.DS_Store
+Thumbs.db
+*.swp

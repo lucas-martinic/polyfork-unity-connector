@@ -11,12 +11,22 @@ the asset's published schema at `/cdn/{id}-params.json`.
 
 ## Install
 
+Unity ▸ **Window ▸ Package Manager ▸ + ▸ Add package from git URL**:
+
+```
+https://github.com/lucas-martinic/polyfork-unity-connector.git
+```
+
+Or by hand, which also lets you pin a version with `#v0.2.0`:
+
 ```jsonc
 // Packages/manifest.json
-"com.polyfork.connector": "https://github.com/lucas-martinic/polyfork-unity.git?path=/Packages/com.polyfork.connector",
+"com.polyfork.connector": "https://github.com/lucas-martinic/polyfork-unity-connector.git",
 "com.unity.cloud.gltfast": "6.19.0",
 "com.unity.nuget.newtonsoft-json": "3.2.2"
 ```
+
+Unity 6000.0 or newer. The two dependencies are resolved from Unity's own registry.
 
 ## The gallery
 
