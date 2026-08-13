@@ -5,6 +5,37 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.5] - 2026-08-13
+
+### Fixed
+
+- **The one-button install could not work.** It handed Unity the release tarballs directly,
+  and Unity's *add from tarball* expects npm's layout: one `package/` folder at the archive
+  root. PuerTS ships archives rooted at `core/` and `quickjs/`, so Unity unpacked each to a
+  temp directory, found no `package.json` at the top, and reported
+
+  ```
+  The file [C:\Users\…\Temp\.tmp-47508-WYY2f8GPZdJO\package.json] cannot be found
+  ```
+
+  which reads as a broken download rather than a wrong shape. PuerTS's own documentation
+  says to extract first and add from disk; the installer now does that.
+
+  It unpacks each archive into `<project>/PuerTS/<package-name>` and adds those folders.
+  Inside the project because the manifest stores the path — a package unpacked into the
+  system temp folder stops existing and takes the project with it on the next resolve — and
+  staged on the same volume, because `Directory.Move` cannot cross drives and on Windows the
+  temp folder frequently is one. Tarballs an earlier version left in `Packages/PuerTS/` are
+  cleaned up.
+
+### Added
+
+- `PolyforkTar`, a minimal tar reader. Unity's runtime predates `System.Formats.Tar`, so
+  gzip is available and tar is not. It is scoped to what these archives actually contain —
+  files and directories, no links, every path short enough to need no long-name record — and
+  refuses any entry that resolves outside the destination. The parsing was checked against
+  both real archives before shipping: 122 and 25 files, every size matching.
+
 ## [0.3.4] - 2026-08-13
 
 ### Fixed

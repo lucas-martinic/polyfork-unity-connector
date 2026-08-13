@@ -296,12 +296,80 @@ namespace Polyfork.EditorTools
         string _installStatus;
         AddAndRemoveRequest _addRequest;
 
-        /// <summary>Where the tarballs are kept. Inside the project, because the manifest
-        /// stores the path: a tarball in a temp folder breaks the package on the next
-        /// resolve, and a relative path under Packages/ still works on a teammate's
-        /// machine.</summary>
-        static string TarballDir =>
-            Path.Combine(Path.GetDirectoryName(Application.dataPath) ?? ".", "Packages", "PuerTS");
+        const string PackageDirName = "PuerTS";
+
+        static string ProjectRoot => Path.GetDirectoryName(Application.dataPath) ?? ".";
+
+        /// <summary>
+        /// Where the unpacked packages live: a folder in the project, beside Assets.
+        ///
+        /// Unpacked rather than handed over as tarballs, because Unity's "add from tarball"
+        /// expects npm's layout - one `package/` folder at the archive root - and PuerTS
+        /// ships archives rooted at `core/` and `quickjs/`. Given one of those, Unity unpacks
+        /// it to a temp directory, finds no package.json at the top, and reports the temp
+        /// path in the error, which reads as a broken download rather than a wrong shape.
+        ///
+        /// Inside the project because the manifest stores the path: a package unpacked into
+        /// the system temp folder stops existing, and takes the project with it next resolve.
+        /// </summary>
+        static string PackageDir => Path.Combine(ProjectRoot, PackageDirName);
+
+        /// <summary>Clears the tarballs an older version left in Packages/, which Unity never
+        /// managed to install and which are 14 MB of nothing.</summary>
+        static void CleanUpStaleTarballs()
+        {
+            try
+            {
+                var stale = Path.Combine(ProjectRoot, "Packages", "PuerTS");
+                if (!Directory.Exists(stale)) return;
+
+                foreach (var f in Directory.GetFiles(stale, "*.tar.gz")) File.Delete(f);
+                if (Directory.GetFileSystemEntries(stale).Length == 0) Directory.Delete(stale);
+            }
+            catch (Exception)
+            {
+                // Tidying is not worth failing an install over.
+            }
+        }
+
+        /// <summary>
+        /// Unpacks one archive and returns the folder holding its package.json.
+        ///
+        /// Staged inside the project rather than the system temp folder so the final move
+        /// stays on one volume: Directory.Move cannot cross drives, and on Windows the temp
+        /// folder frequently is one.
+        /// </summary>
+        static string Unpack(byte[] archive)
+        {
+            var staging = Path.Combine(PackageDir, ".staging");
+            if (Directory.Exists(staging)) Directory.Delete(staging, true);
+            Directory.CreateDirectory(staging);
+
+            try
+            {
+                PolyforkTar.ExtractTarGz(archive, staging);
+
+                var manifest = Directory.GetFiles(staging, "package.json", SearchOption.AllDirectories)
+                    .OrderBy(f => f.Length)          // the shallowest is the package root
+                    .FirstOrDefault();
+
+                if (manifest == null) throw new Exception("the archive contains no package.json");
+
+                var root = Path.GetDirectoryName(manifest);
+                var name = (string)JObject.Parse(File.ReadAllText(manifest))["name"]
+                           ?? Path.GetFileName(root);
+
+                var target = Path.Combine(PackageDir, name);
+                if (Directory.Exists(target)) Directory.Delete(target, true);
+
+                Directory.Move(root, target);
+                return target;
+            }
+            finally
+            {
+                if (Directory.Exists(staging)) Directory.Delete(staging, true);
+            }
+        }
 
         /// <summary>
         /// Downloads a matched pair of PuerTS packages and adds both to the project.
@@ -344,15 +412,23 @@ namespace Polyfork.EditorTools
                     return;
                 }
 
-                Directory.CreateDirectory(TarballDir);
+                Directory.CreateDirectory(PackageDir);
+                CleanUpStaleTarballs();
 
-                foreach (var asset in new[] { core, quickjs })
+                var assets = new[] { core, quickjs };
+                var installed = new string[assets.Length];
+
+                for (var i = 0; i < assets.Length; i++)
                 {
-                    _installStatus = $"Downloading {asset.name}...";
+                    _installStatus = $"Downloading {assets[i].name}...";
                     Repaint();
 
-                    var bytes = await DownloadAsync(asset.url);
-                    File.WriteAllBytes(Path.Combine(TarballDir, asset.name), bytes);
+                    var bytes = await DownloadAsync(assets[i].url);
+
+                    _installStatus = $"Unpacking {assets[i].name}...";
+                    Repaint();
+
+                    installed[i] = Unpack(bytes);
                 }
 
                 _installStatus = "Adding the packages to the project...";
@@ -366,8 +442,8 @@ namespace Polyfork.EditorTools
 
                 _addRequest = Client.AddAndRemove(new[]
                 {
-                    $"file:PuerTS/{core.name}",
-                    $"file:PuerTS/{quickjs.name}"
+                    $"file:../{PackageDirName}/{Path.GetFileName(installed[0])}",
+                    $"file:../{PackageDirName}/{Path.GetFileName(installed[1])}"
                 });
 
                 EditorApplication.update += PollAdd;
