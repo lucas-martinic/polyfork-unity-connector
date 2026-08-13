@@ -5,6 +5,33 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] - 2026-08-13
+
+### Fixed
+
+- **The welcome window told signed-in users they had no account.** It decided that from
+  `PolyforkKeySettings.HasKey`, which only reads `EditorPrefs` — so a key supplied through
+  `POLYFORK_API_KEY` or a `polyfork.key` file did not count, and a Founders user was shown
+  the anonymous pitch directly above their own "900 bakes left this hour". Sign-in state
+  now comes from the server's `authenticated`, which is the only thing that actually knows.
+- The window no longer opens taller than its content, and reads a good deal warmer.
+
+### Added
+
+- **Locked assets are marked as locked.** `PolyforkAsset` now reads `owned` and `plan` from
+  the catalogue, which it previously ignored entirely — it knew only `free`, so it could not
+  tell an asset you had licensed from one you had not. Paid assets you do not own are dimmed
+  in the grid, badged `locked`, and offer *Unlock with Pro* instead of *Import*.
+
+  They still preview and still remix. The public preview GLB is what makes the catalogue
+  browsable, so the line is drawn at **writing a file into `Assets/`**, not at looking.
+
+### Changed
+
+- Asset detail shows what you may do with an asset (`free` / `owned` / `included in Pro`)
+  rather than a price. `price_usd` is retired server-side and now returns null for every
+  paid asset, so the old `$1-3` label was inventing a number.
+
 ## [0.2.2] - 2026-08-13
 
 ### Fixed

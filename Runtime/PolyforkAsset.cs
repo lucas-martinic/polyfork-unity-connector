@@ -15,6 +15,24 @@ namespace Polyfork
         public string Kit;
         public int Triangles;
         public bool Free;
+
+        /// <summary>
+        /// The plan this asset belongs to: "free", "pro", ... Read this rather than a price.
+        /// The catalogue retired price_usd and now returns null for every paid asset, with
+        /// price_note explaining that paid assets are not sold separately.
+        /// </summary>
+        public string Plan;
+
+        /// <summary>True when this connection has already licensed the asset.</summary>
+        public bool Owned;
+
+        /// <summary>
+        /// Visible in the catalogue, but not this connection's to use: a paid asset nobody
+        /// has bought here. The public preview GLB still loads - that is what makes the
+        /// store browsable - but it is not a licence to ship the mesh.
+        /// </summary>
+        public bool Locked => !Free && !Owned;
+
         public bool Remixable;
         public bool HasRig;
         public bool HasNight;
@@ -69,6 +87,8 @@ namespace Polyfork
                 Kit = (string)o["kit"],
                 Triangles = o["triangles"]?.Type is JTokenType.Integer ? o["triangles"].Value<int>() : 0,
                 Free = o["free"]?.Type == JTokenType.Boolean && o["free"].Value<bool>(),
+                Plan = (string)o["plan"],
+                Owned = o["owned"]?.Type == JTokenType.Boolean && o["owned"].Value<bool>(),
                 Remixable = o["remixable"]?.Type == JTokenType.Boolean && o["remixable"].Value<bool>(),
                 HasRig = o["has_rig"]?.Type == JTokenType.Boolean && o["has_rig"].Value<bool>(),
                 HasNight = o["has_night"]?.Type == JTokenType.Boolean && o["has_night"].Value<bool>(),

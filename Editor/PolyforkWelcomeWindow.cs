@@ -11,18 +11,19 @@ namespace Polyfork.EditorTools
     /// <c>Polyfork ▸ Welcome</c>.
     ///
     /// It exists because the first thing a new user needs to know is that they do not need
-    /// an account. Browsing, previewing and importing all work with no key at all; a key
-    /// raises the remix allowance and unlocks paid downloads. Left undiscovered, that reads
-    /// the other way round - a store that wants signing up to before it shows anything.
+    /// an account. Browsing, previewing and remixing all work with no key at all. Left
+    /// undiscovered, that reads the other way round - a store that wants signing up to
+    /// before it shows you anything.
     ///
-    /// The allowance quoted here is read from GET /api/me rather than written into this
-    /// file, for the same reason the knobs are: the numbers are the server's to change, and
-    /// a hardcoded "40 an hour" becomes a lie the first time pricing moves.
+    /// Everything it says about the account is read from GET /api/me rather than written
+    /// into this file, for the same reason the knobs are read from the schema: the numbers
+    /// and tier names belong to the server, and a hardcoded "40 an hour" becomes a lie the
+    /// first time pricing moves.
     /// </summary>
     public sealed class PolyforkWelcomeWindow : EditorWindow
     {
         /// <summary>Bumped only when the window has something new to say.</summary>
-        const int Revision = 1;
+        const int Revision = 2;
 
         /// <summary>
         /// Per-project, because "just installed" is a fact about this project, while
@@ -45,7 +46,8 @@ namespace Polyfork.EditorTools
         }
 
         PolyforkAccess _access;
-        string _status = "Checking what this connection can do...";
+        bool _loading = true;
+        string _error;
         CancellationTokenSource _cts;
 
         [MenuItem("Polyfork/Welcome", priority = 2)]
@@ -53,17 +55,21 @@ namespace Polyfork.EditorTools
         {
             var window = GetWindow<PolyforkWelcomeWindow>(utility: true, title: "Polyfork", focus: true);
             PolyforkBrand.ApplyTitle(window, "Polyfork");
-            window.minSize = new Vector2(460f, 366f);
-            window.maxSize = new Vector2(460f, 376f);
+
+            // Fixed size: the content does not reflow, and a utility window that remembers a
+            // stretched size from last time leaves a lake of grey under the buttons.
+            var size = new Vector2(470f, 340f);
+            window.minSize = size;
+            window.maxSize = size;
             window.ShowUtility();
         }
 
         /// <summary>
         /// Shows the window the first time this project sees this revision of the package.
         ///
-        /// Deliberately quiet in batch mode: a CI run that opens a modal window and waits
-        /// for a click is a hung build, and this is exactly the kind of nicety that causes
-        /// one. Also delayed by a frame, because the editor is still importing when
+        /// Deliberately quiet in batch mode: a CI run that opens a modal and waits for a
+        /// click is a hung build, and this is exactly the kind of nicety that causes one.
+        /// Delayed by a frame too, because the editor is still importing when
         /// InitializeOnLoad runs and a window opened there can come up blank.
         /// </summary>
         [InitializeOnLoadMethod]
@@ -99,83 +105,140 @@ namespace Polyfork.EditorTools
             {
                 var client = new PolyforkClient { ApiKey = PolyforkCredentials.Resolve(null) };
                 _access = await client.GetAccessAsync(_cts.Token);
-                _status = null;
             }
             catch (OperationCanceledException)
             {
-                // The window closed while the request was in flight. Nothing to report.
+                return;   // window closed mid-request; nothing to report
             }
             catch (Exception e)
             {
-                // Never block the front door on the network: the buttons below still work.
-                _status = $"Could not reach polyfork.dev ({e.Message}). You can still browse once connected.";
+                _error = e.Message;
             }
 
+            _loading = false;
             if (this != null) Repaint();
         }
 
+        /// <summary>
+        /// Whether this connection is signed in.
+        ///
+        /// Answered by the server, not by PolyforkKeySettings: a key can arrive from the
+        /// POLYFORK_API_KEY environment variable or a polyfork.key file as well as from
+        /// EditorPrefs, and reading only EditorPrefs told a signed-in Founders user that no
+        /// account was needed while quoting them their 900 bakes an hour.
+        /// </summary>
+        bool SignedIn => _access is { Authenticated: true };
+
         void OnGUI()
         {
-            PolyforkBrand.DrawHeader("Parametric low-poly assets, inside the editor");
+            DrawHero();
 
-            EditorGUILayout.Space(10f);
-
-            using (new EditorGUILayout.VerticalScope(new GUIStyle { padding = new RectOffset(14, 14, 0, 0) }))
+            using (new EditorGUILayout.VerticalScope(
+                       new GUIStyle { padding = new RectOffset(18, 18, 0, 0) }))
             {
-                EditorGUILayout.LabelField(
-                    "Browse the polyfork.dev catalogue, turn the same knobs the web viewer " +
-                    "exposes, and import the result as a .glb with your colours baked in.",
-                    EditorStyles.wordWrappedLabel);
-
+                EditorGUILayout.Space(12f);
+                DrawPitch();
                 EditorGUILayout.Space(10f);
-                DrawAllowance();
+                DrawStatus();
                 EditorGUILayout.Space(12f);
                 DrawActions();
             }
         }
 
-        /// <summary>
-        /// What this connection can do right now, in the server's own numbers.
-        /// </summary>
-        void DrawAllowance()
+        /// <summary>A proper hero rather than a toolbar strip: this is the one screen that
+        /// gets to be a little bit of an occasion.</summary>
+        void DrawHero()
         {
-            if (PolyforkKeySettings.HasKey && _access is { Authenticated: true })
+            var rect = GUILayoutUtility.GetRect(0f, 96f, GUILayout.ExpandWidth(true));
+
+            EditorGUI.DrawRect(rect, EditorGUIUtility.isProSkin
+                ? new Color(0.145f, 0.15f, 0.165f)
+                : new Color(0.93f, 0.94f, 0.96f));
+            EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - 2f, rect.width, 2f), PolyforkBrand.Accent);
+
+            var mark = PolyforkBrand.Mark;
+            if (mark != null)
             {
-                EditorGUILayout.HelpBox(
-                    $"Signed in. {_access.Describe()}.", MessageType.Info);
+                GUI.DrawTexture(new Rect(rect.x + 18f, rect.y + 20f, 56f, 56f), mark, ScaleMode.ScaleToFit);
+            }
+
+            var title = new GUIStyle(EditorStyles.boldLabel) { fontSize = 20 };
+            GUI.Label(new Rect(rect.x + 88f, rect.y + 24f, rect.width - 100f, 26f), "Polyfork", title);
+
+            var sub = new GUIStyle(EditorStyles.label) { wordWrap = true, fontSize = 11 };
+            sub.normal.textColor = EditorStyles.centeredGreyMiniLabel.normal.textColor;
+            GUI.Label(new Rect(rect.x + 88f, rect.y + 50f, rect.width - 106f, 34f),
+                "3D assets you can turn the knobs on, right here in the editor.", sub);
+        }
+
+        void DrawPitch()
+        {
+            EditorGUILayout.LabelField(
+                "Every model is a little program. Pick one, drag its sliders, flip its " +
+                "options, recolour it, and take the result into your project as a .glb.",
+                EditorStyles.wordWrappedLabel);
+        }
+
+        /// <summary>What this particular connection can do, in the server's own words.</summary>
+        void DrawStatus()
+        {
+            if (_loading)
+            {
+                EditorGUILayout.LabelField("Saying hello to polyfork.dev...", EditorStyles.miniLabel);
                 return;
             }
 
-            if (_status != null)
+            if (_error != null)
             {
-                EditorGUILayout.HelpBox(_status, MessageType.None);
+                EditorGUILayout.LabelField(
+                    $"Could not reach polyfork.dev ({_error}). Everything still works once you are online.",
+                    EditorStyles.wordWrappedMiniLabel);
                 return;
             }
 
-            var free = "No account needed. Browsing, previewing and importing all work as you are.";
-            if (_access != null)
+            var style = new GUIStyle(EditorStyles.wordWrappedMiniLabel);
+
+            if (SignedIn)
             {
-                free += $"\n\nRight now: {_access.Describe()}.";
-                if (!string.IsNullOrEmpty(_access.UpgradeNote)) free += $"\n{_access.UpgradeNote}";
+                style.normal.textColor = PolyforkBrand.Accent;
+                EditorGUILayout.LabelField($"Signed in — {_access.Describe()}. Have fun.", style);
+                return;
             }
 
-            EditorGUILayout.HelpBox(free, MessageType.Info);
+            var line = "No account needed. Browse, remix and import free assets as you are";
+            if (_access != null) line += $" — {_access.Describe()}";
+            EditorGUILayout.LabelField(line + ".", style);
+
+            if (!string.IsNullOrEmpty(_access?.UpgradeNote))
+                EditorGUILayout.LabelField(_access.UpgradeNote, EditorStyles.wordWrappedMiniLabel);
         }
 
         void DrawActions()
         {
-            using (new EditorGUILayout.HorizontalScope())
+            // Signed in already? Then the only useful button is the one into the catalogue.
+            if (SignedIn)
             {
-                if (GUILayout.Button("Add an API key", GUILayout.Height(30f)))
-                {
-                    Close();
-                    PolyforkApiKeyWindow.Open();
-                }
-
-                if (GUILayout.Button("Continue free", GUILayout.Height(30f)))
+                if (GUILayout.Button("Browse the catalogue", GUILayout.Height(32f)))
                 {
                     Close();
                     PolyforkGalleryWindow.Open();
+                }
+            }
+            else
+            {
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    if (GUILayout.Button("Start browsing — it's free", GUILayout.Height(32f)))
+                    {
+                        Close();
+                        PolyforkGalleryWindow.Open();
+                    }
+
+                    if (GUILayout.Button("I have a key", GUILayout.Height(32f), GUILayout.Width(120f)))
+                    {
+                        Close();
+                        PolyforkApiKeyWindow.Open();
+                    }
                 }
             }
 
@@ -183,7 +246,7 @@ namespace Polyfork.EditorTools
 
             using (new EditorGUILayout.HorizontalScope())
             {
-                if (GUILayout.Button("Create a free account", EditorStyles.miniButton))
+                if (!SignedIn && GUILayout.Button("Create a free account", EditorStyles.miniButton))
                     Application.OpenURL(PolyforkKeySettings.AccountUrl);
 
                 if (GUILayout.Button("Pricing", EditorStyles.miniButton))
@@ -195,7 +258,7 @@ namespace Polyfork.EditorTools
 
             EditorGUILayout.Space(4f);
             EditorGUILayout.LabelField(
-                "Reopen any time from Polyfork ▸ Welcome.", EditorStyles.centeredGreyMiniLabel);
+                "Polyfork ▸ Welcome brings this back.", EditorStyles.centeredGreyMiniLabel);
         }
     }
 }

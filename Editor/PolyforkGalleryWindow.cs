@@ -662,11 +662,17 @@ namespace Polyfork.EditorTools
             if (tex != null) GUI.DrawTexture(imageRect, tex, ScaleMode.ScaleToFit);
             else EditorGUI.DrawRect(imageRect, new Color(1f, 1f, 1f, 0.04f));
 
+            // A locked asset is still worth showing - browsing the whole catalogue is the
+            // point - but it must not look like something you can ship. Dimmed and badged,
+            // not hidden.
+            if (asset.Locked)
+                EditorGUI.DrawRect(imageRect, new Color(0.08f, 0.09f, 0.11f, 0.55f));
+
             var labelRect = new Rect(rect.x + 4f, rect.yMax - 24f, rect.width - 8f, 14f);
             GUI.Label(labelRect, asset.Title ?? asset.Id, EditorStyles.miniLabel);
 
             var metaRect = new Rect(rect.x + 4f, rect.yMax - 12f, rect.width - 8f, 12f);
-            var badge = asset.Free ? "free" : "pro";
+            var badge = asset.Free ? "free" : asset.Owned ? "owned" : "locked";
             if (asset.Remixable) badge += " - remix";
             GUI.Label(metaRect, $"{asset.Triangles} tri - {badge}", EditorStyles.miniLabel);
 
@@ -691,7 +697,7 @@ namespace Polyfork.EditorTools
 
             EditorGUILayout.LabelField(_selected.Title ?? _selected.Id, EditorStyles.boldLabel);
             EditorGUILayout.LabelField(
-                $"{_selected.Triangles} tri - {_selected.Class} - {(_selected.Free ? "free" : $"${_selected.PriceUsdOrZero()}")}",
+                $"{_selected.Triangles} tri - {_selected.Class} - {_selected.AccessLabel()}",
                 EditorStyles.miniLabel);
 
             var previewRect = GUILayoutUtility.GetRect(DetailWidth - 12f, 200f);
@@ -976,12 +982,35 @@ namespace Polyfork.EditorTools
         void DrawImportSection()
         {
             EditorGUILayout.LabelField("Import", EditorStyles.boldLabel);
-            _importFolder = EditorGUILayout.TextField("Folder", _importFolder);
 
-            using (new EditorGUI.DisabledScope(_rebuilding))
+            /* A locked asset previews but does not import. The preview GLB is public, which
+             * is what makes the catalogue browsable, but a file in Assets/ is a file you
+             * ship - so the line is drawn at writing to disk rather than at looking. */
+            if (_selected.Locked)
             {
-                if (GUILayout.Button("Import GLB to project", GUILayout.Height(24f)))
-                    _ = ImportAsync();
+                EditorGUILayout.HelpBox(
+                    $"{_selected.Title} is {_selected.AccessLabel()}. Remix and preview it as much as " +
+                    "you like; importing needs a licence.",
+                    MessageType.None);
+
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    if (GUILayout.Button("Unlock with Pro", GUILayout.Height(24f)))
+                        Application.OpenURL(PolyforkKeySettings.PricingUrl);
+
+                    if (GUILayout.Button("I have a key", GUILayout.Height(24f), GUILayout.Width(110f)))
+                        PolyforkApiKeyWindow.Open();
+                }
+            }
+            else
+            {
+                _importFolder = EditorGUILayout.TextField("Folder", _importFolder);
+
+                using (new EditorGUI.DisabledScope(_rebuilding))
+                {
+                    if (GUILayout.Button("Import GLB to project", GUILayout.Height(24f)))
+                        _ = ImportAsync();
+                }
             }
 
             if (GUILayout.Button("Open on polyfork.dev", EditorStyles.miniButton))
@@ -994,6 +1023,17 @@ namespace Polyfork.EditorTools
         async Task ImportAsync()
         {
             var asset = _selected;
+
+            // Guarded here as well as in the UI: the button is the polite version, this is
+            // the one that holds if the method is ever called from anywhere else.
+            if (asset is { Locked: true })
+            {
+                _importMessage = $"{asset.Title} is {asset.AccessLabel()}, so it cannot be imported yet.";
+                _importMessageType = MessageType.Warning;
+                Repaint();
+                return;
+            }
+
             _importMessage = "Importing...";
             _importMessageType = MessageType.Info;
             Repaint();
@@ -1048,6 +1088,16 @@ namespace Polyfork.EditorTools
 
     internal static class PolyforkAssetExtensions
     {
-        public static string PriceUsdOrZero(this PolyforkAsset asset) => asset.Free ? "0" : "1-3";
+        /// <summary>
+        /// What this connection may do with the asset, in words.
+        ///
+        /// Replaces a price: the catalogue retired price_usd and returns null for every paid
+        /// asset, with price_note saying paid assets are not sold separately and that `plan`
+        /// is the field to read.
+        /// </summary>
+        public static string AccessLabel(this PolyforkAsset asset) =>
+            asset.Free ? "free"
+            : asset.Owned ? "owned"
+            : $"included in {(string.IsNullOrEmpty(asset.Plan) ? "Pro" : asset.Plan)}";
     }
 }

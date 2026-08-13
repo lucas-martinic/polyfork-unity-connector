@@ -306,6 +306,33 @@ namespace Polyfork.Tests
             Assert.IsFalse(paidAsset.HasModule, "no module means no local bake, so fall back to the server");
         }
 
+        /// <summary>
+        /// The catalogue retired price_usd: it is null on every paid asset now, with
+        /// price_note pointing at `plan` instead. Ownership is what decides whether an asset
+        /// can be written into a project, so it has to be read rather than guessed from a
+        /// missing price.
+        /// </summary>
+        [Test]
+        public void OwnershipComesFromTheCatalogueNotFromAPrice()
+        {
+            const string paid = @"{""id"":""brick-church-6cf1af"",""title"":""Brick Church"",
+""free"":false,""plan"":""pro"",""price_usd"":null,""owned"":false,""remixable"":true}";
+
+            const string owned = @"{""id"":""brick-church-6cf1af"",""title"":""Brick Church"",
+""free"":false,""plan"":""pro"",""price_usd"":null,""owned"":true,""remixable"":true}";
+
+            const string free = @"{""id"":""street-lamp-29f365"",""title"":""Street Lamp"",
+""free"":true,""plan"":""free"",""owned"":false,""remixable"":true}";
+
+            var locked = PolyforkAsset.FromJson(paid);
+            Assert.AreEqual("pro", locked.Plan);
+            Assert.IsFalse(locked.Owned);
+            Assert.IsTrue(locked.Locked, "a paid asset nobody here has bought is not importable");
+
+            Assert.IsFalse(PolyforkAsset.FromJson(owned).Locked, "owning it unlocks it");
+            Assert.IsFalse(PolyforkAsset.FromJson(free).Locked, "a free asset is never locked");
+        }
+
         [Test]
         public void SizeIsReadAsAVectorNotAScalar()
         {
