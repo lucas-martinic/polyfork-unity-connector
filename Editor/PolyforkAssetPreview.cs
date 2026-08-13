@@ -16,12 +16,18 @@ namespace Polyfork.EditorTools
         /// <summary>0xeceae6, the store viewer's background.</summary>
         public static readonly Color Background = new(0.925f, 0.918f, 0.902f, 1f);
 
-        /// <summary>A touch lighter than the background, so the model reads as standing on
-        /// something rather than floating in a void.</summary>
-        static readonly Color GroundColor = new(0.965f, 0.961f, 0.953f, 1f);
+        /// <summary>
+        /// The same colour as the background, so the horizon disappears.
+        ///
+        /// A ground that contrasts with the sky draws a line across the frame and turns a
+        /// product shot into a diorama. Matching them leaves only the shadow to say the model
+        /// is standing on something, which is the whole trick the store viewer uses.
+        /// </summary>
+        static Color GroundColor => Background;
 
         PreviewRenderUtility _utility;
         GameObject _ground;
+        GameObject _contact;
         GameObject _target;
         Vector2 _orbit = new(25f, -25f);
         float _distance = 2.2f;
@@ -86,6 +92,7 @@ namespace Polyfork.EditorTools
             _bounds = PolyforkSpawner.CalculateBounds(_target);
 
             EnsureGround();
+            EnsureContactShadow();
             PlaceGround();
 
             if (frameCamera || !hadTarget) Frame();
@@ -139,19 +146,65 @@ namespace Polyfork.EditorTools
             _utility.AddSingleGO(_ground);
         }
 
-        /// <summary>Sits the ground under the model, wide enough to catch the shadow.</summary>
+        /// <summary>
+        /// The blob the model sits in. Drawn rather than cast: see the shader's own note on
+        /// why a real-time shadow cannot be relied on inside a preview scene.
+        /// </summary>
+        void EnsureContactShadow()
+        {
+            if (_contact != null) return;
+
+            var shader = Shader.Find("Polyfork/Contact Shadow");
+            if (shader == null) return;      // cosmetic; never worth failing a preview over
+
+            _contact = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            _contact.name = "Polyfork Contact Shadow";
+            _contact.hideFlags = HideFlags.HideAndDontSave;
+
+            var collider = _contact.GetComponent<Collider>();
+            if (collider != null) UnityEngine.Object.DestroyImmediate(collider);
+
+            var renderer = _contact.GetComponent<MeshRenderer>();
+            renderer.sharedMaterial = new Material(shader)
+            {
+                name = "Polyfork Contact Shadow",
+                hideFlags = HideFlags.HideAndDontSave
+            };
+            renderer.shadowCastingMode = ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+
+            // A quad faces +Z; lay it flat.
+            _contact.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+
+            _utility.AddSingleGO(_contact);
+        }
+
+        /// <summary>Sits the ground and its shadow under the model.</summary>
         void PlaceGround()
         {
-            if (_ground == null) return;
-
             var span = Mathf.Max(_bounds.size.x, _bounds.size.z, 0.2f);
+            var floor = _bounds.min.y;
 
-            // The primitive plane is 10 units across, hence the tenth.
-            _ground.transform.localScale = Vector3.one * (span * 6f / 10f);
-            _ground.transform.position = new Vector3(
-                _bounds.center.x,
-                _bounds.min.y - span * 0.002f,   // just below, so it does not z-fight the model
-                _bounds.center.z);
+            if (_ground != null)
+            {
+                // The primitive plane is 10 units across, hence the tenth.
+                _ground.transform.localScale = Vector3.one * (span * 6f / 10f);
+                _ground.transform.position = new Vector3(
+                    _bounds.center.x,
+                    floor - span * 0.004f,       // just below, so it does not z-fight the model
+                    _bounds.center.z);
+            }
+
+            if (_contact != null)
+            {
+                // Wider than the model's footprint so the falloff has somewhere to go, and
+                // offset along the key light so the model looks lit rather than pinned.
+                _contact.transform.localScale = Vector3.one * (span * 2.1f);
+                _contact.transform.position = new Vector3(
+                    _bounds.center.x - span * 0.06f,
+                    floor - span * 0.002f,       // above the ground, below the model
+                    _bounds.center.z - span * 0.05f);
+            }
         }
 
         public void Clear()
@@ -243,6 +296,12 @@ namespace Polyfork.EditorTools
             {
                 UnityEngine.Object.DestroyImmediate(_ground);
                 _ground = null;
+            }
+
+            if (_contact != null)
+            {
+                UnityEngine.Object.DestroyImmediate(_contact);
+                _contact = null;
             }
 
             _utility?.Cleanup();

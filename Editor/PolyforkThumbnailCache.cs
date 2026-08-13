@@ -36,6 +36,16 @@ namespace Polyfork.EditorTools
         /// Returns the thumbnail if available, otherwise null and starts fetching it.
         /// Safe to call every repaint.
         /// </summary>
+        /// <summary>
+        /// The cached texture, or null - never starts a download.
+        ///
+        /// For cards that are laid out but off screen: they should draw whatever has already
+        /// arrived and ask for nothing, so scrolling decides what gets fetched rather than
+        /// catalogue size.
+        /// </summary>
+        public Texture2D Peek(string url)
+            => !string.IsNullOrEmpty(url) && _textures.TryGetValue(url, out var tex) ? tex : null;
+
         public Texture2D Get(string url)
         {
             if (string.IsNullOrEmpty(url)) return null;

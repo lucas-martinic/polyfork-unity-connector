@@ -5,6 +5,24 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3] - 2026-08-13
+
+### Fixed
+
+- **Opening the gallery started a download for every thumbnail in the catalogue.** IMGUI lays
+  out every row in a scroll view whether it is on screen or not, so 480 cards meant 480
+  fetches at once — and the thumbnails you were looking at queued behind the ones you were
+  not. Off-screen rows are still laid out, so the scrollbar stays honest, but they no longer
+  ask for anything.
+- **The shadow no longer depends on `PreviewRenderUtility` casting one.** It renders into its
+  own scene and its shadow support is unreliable, producing none at all under a scriptable
+  pipeline whatever the light says. The model now sits in a drawn contact shadow: a radial
+  falloff computed in the fragment shader, no texture and no light, which draws the same on
+  every machine. The `ShadowCaster` pass stays for wherever real shadows do work.
+- **The ground is the colour of the background.** A ground that contrasts with the sky draws
+  a line across the frame and turns a product shot into a diorama; matching them leaves only
+  the shadow to say the model is standing on something.
+
 ## [0.5.2] - 2026-08-13
 
 ### Changed

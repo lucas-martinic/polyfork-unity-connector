@@ -846,12 +846,27 @@ namespace Polyfork.EditorTools
                 var available = Mathf.Max(CardSize, position.width - DetailWidth - 28f);
                 var columns = Mathf.Max(1, Mathf.FloorToInt(available / (CardSize + CardPadding)));
 
-                for (var i = 0; i < _filtered.Count; i += columns)
+                /* Only ask for the thumbnails that are on screen.
+                 *
+                 * IMGUI lays out every row in a scroll view, on screen or not, so drawing
+                 * 480 cards used to start 480 downloads the moment the window opened - and
+                 * the ones you were actually looking at queued behind the ones you were not.
+                 * The rows are still laid out, so the scrollbar stays honest; they simply do
+                 * not fetch. A generous margin either side keeps scrolling ahead of the
+                 * loads rather than chasing them. */
+                var rowHeight = CardSize + 26f + 4f;
+                var firstRow = Mathf.FloorToInt(_gridScroll.y / rowHeight) - 2;
+                var lastRow = firstRow + Mathf.CeilToInt(Mathf.Max(position.height, 200f) / rowHeight) + 4;
+
+                var row = 0;
+                for (var i = 0; i < _filtered.Count; i += columns, row++)
                 {
+                    var onScreen = row >= firstRow && row <= lastRow;
+
                     using (new EditorGUILayout.HorizontalScope())
                     {
                         for (var c = 0; c < columns && i + c < _filtered.Count; c++)
-                            DrawCard(_filtered[i + c]);
+                            DrawCard(_filtered[i + c], onScreen);
                         GUILayout.FlexibleSpace();
                     }
                 }
@@ -860,7 +875,7 @@ namespace Polyfork.EditorTools
             EditorGUILayout.EndScrollView();
         }
 
-        void DrawCard(PolyforkAsset asset)
+        void DrawCard(PolyforkAsset asset, bool fetchThumbnail = true)
         {
             var rect = GUILayoutUtility.GetRect(CardSize, CardSize + 26f, GUILayout.Width(CardSize),
                 GUILayout.Height(CardSize + 26f));
@@ -876,7 +891,7 @@ namespace Polyfork.EditorTools
             }
 
             var imageRect = new Rect(rect.x + 3f, rect.y + 3f, rect.width - 6f, rect.width - 6f);
-            var tex = _thumbs.Get(asset.Thumbnail);
+            var tex = fetchThumbnail ? _thumbs.Get(asset.Thumbnail) : _thumbs.Peek(asset.Thumbnail);
             if (tex != null) GUI.DrawTexture(imageRect, tex, ScaleMode.ScaleToFit);
             else EditorGUI.DrawRect(imageRect, new Color(1f, 1f, 1f, 0.04f));
 
