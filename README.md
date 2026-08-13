@@ -1,4 +1,15 @@
-# Polyfork for Unity
+<p align="center">
+  <img src="Documentation~/polyfork-mark.png" width="88" height="88" alt="Polyfork">
+</p>
+
+<h1 align="center">Polyfork for Unity</h1>
+
+<p align="center">
+  <a href="https://polyfork.dev">polyfork.dev</a>
+  &nbsp;·&nbsp; <a href="CHANGELOG.md">Changelog</a>
+  &nbsp;·&nbsp; <a href="LICENSE.md">MIT</a>
+  &nbsp;·&nbsp; Unity 6000.0+
+</p>
 
 The [Polyfork](https://polyfork.dev) store, inside the editor. Browse the catalogue, turn
 the same knobs the web viewer exposes, watch the model rebuild, and drop it into your
@@ -190,6 +201,26 @@ for the full trade-off.
 - Assets are authored at real-world metres with the origin on the ground (`minY = 0`).
   Don't rescale to fake a fit; pick a right-sized asset.
 - Requires **Linear** colour space so vertex-colour maths matches the authored hexes.
+
+## Exporting to FBX
+
+There is no FBX button here on purpose. Assets import as `.glb`, which glTFast turns into a
+prefab, and that prefab is a normal Unity GameObject — so Unity's own exporter already does
+the job:
+
+1. Install **FBX Exporter** (`com.unity.formats.fbx`) from the Package Manager.
+2. Right-click the imported prefab ▸ **Export To FBX**.
+
+It carries the vertex colours across, which is the part that matters for these assets: a
+Polyfork model is one mesh with one material and no textures, so `COLOR_0` *is* the look.
+The exporter writes them as an `FbxLayerElementVertexColor` layer whenever the mesh reports
+`HasValidVertexColors()`.
+
+Prefer the `.glb` where you have the choice. It is the file polyfork.dev actually served, so
+it matches the web viewer exactly, and vertex colours are a first-class glTF concept rather
+than something to verify after a conversion. Blender, Godot, three.js and Unreal 5 all read
+glTF natively. Reach for FBX when a pipeline demands it — Mixamo, or a Maya-centric
+studio — not by default.
 
 ## Samples
 

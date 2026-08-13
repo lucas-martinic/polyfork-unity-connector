@@ -132,6 +132,19 @@ the Polyfork mark. See `CHANGELOG.md`.
 6. **A licensing sentence for previews** — your own action item from earlier: what a studio
    may do with an asset previewed in the gallery but not yet licensed.
 
+## 6b. Decided against
+
+- **An FBX export button.** Considered 2026-08-13. Unity's own FBX Exporter
+  (`com.unity.formats.fbx`) already exports any imported prefab, vertex colours included:
+  it writes an `FbxLayerElementVertexColor` layer when the mesh reports
+  `HasValidVertexColors()`, which is the only part that matters here, since a Polyfork asset
+  is one untextured mesh whose entire look is `COLOR_0`. Building it in would wrap an
+  existing right-click menu item and pull a native Autodesk SDK into a package that has two
+  lightweight managed dependencies. The `.glb` is also the more faithful artifact: it is
+  literally what the server sent, so it matches the web viewer, and every target engine now
+  reads glTF. Documented in the README's *Exporting to FBX* section instead. Revisit only
+  if customers turn up whose pipeline genuinely cannot ingest glTF.
+
 ## 7. Gotchas that will bite
 
 - **PowerShell 5.1 mangles double quotes** passed to `git`. Always use `git commit -F <file>`.
