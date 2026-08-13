@@ -71,7 +71,7 @@ namespace Polyfork.Tests
         {
             var client = NewClient();
 
-            var baseline = client.GetGlbAsync(client.RemixGlbUrl(DrumId, null));
+            var baseline = client.GetGlbAsync(client.RemixGlbUrl(DrumId));
             yield return Await(baseline);
 
             var taller = client.GetGlbAsync(client.RemixGlbUrl(
@@ -80,6 +80,66 @@ namespace Polyfork.Tests
 
             Assert.AreNotEqual(baseline.Result.Length, taller.Result.Length,
                 "a range knob is baked server-side, so the GLB must differ");
+        }
+
+        /// <summary>
+        /// Pins the correction made in 0.2.0. The client hid structural knobs for a whole
+        /// release on the assumption that only ranges were baked; this is the test that
+        /// would have caught it, and that will catch the reverse if it ever swings back.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator StructuralChoiceAndToggleActuallyChangeTheMesh()
+        {
+            const string churchId = "brick-church-6cf1af";
+            var client = NewClient();
+
+            var schemaTask = client.GetParamsAsync(churchId);
+            yield return Await(schemaTask);
+            var schema = schemaTask.Result;
+
+            Assert.AreEqual(PolyforkKnobSupport.ServerRebuild, schema.Knobs["towerHeight"].Support,
+                "towerHeight is a geometry choice, which the endpoint bakes");
+            Assert.AreEqual(PolyforkKnobSupport.ServerRebuild, schema.Knobs["rose"].Support,
+                "rose is a geometry toggle, which the endpoint bakes");
+
+            var baseline = client.GetGlbAsync(client.RemixGlbUrl(churchId));
+            yield return Await(baseline);
+
+            var shorter = new PolyforkKnobValues();
+            shorter.SetChoice("towerHeight", "12");           // the string, not the number
+            var shorterTask = client.GetGlbAsync(client.RemixGlbUrl(churchId, shorter));
+            yield return Await(shorterTask);
+
+            var noRose = new PolyforkKnobValues();
+            noRose.SetBool("rose", false);
+            var noRoseTask = client.GetGlbAsync(client.RemixGlbUrl(churchId, noRose));
+            yield return Await(noRoseTask);
+
+            Assert.AreNotEqual(baseline.Result.Length, shorterTask.Result.Length,
+                "a geometry choice must rebuild the mesh; equal bytes means the value was dropped");
+            Assert.AreNotEqual(baseline.Result.Length, noRoseTask.Result.Length,
+                "a geometry toggle must rebuild the mesh");
+        }
+
+        /// <summary>
+        /// The strictness that makes a wrong type look like a broken control rather than an
+        /// error: options are published as strings, and a number matches none of them.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator AChoiceSentAsANumberIsSilentlyDropped()
+        {
+            const string churchId = "brick-church-6cf1af";
+            var client = NewClient();
+
+            var baseline = client.GetGlbAsync(client.RemixGlbUrl(churchId));
+            yield return Await(baseline);
+
+            var numeric = client.GetGlbAsync(client.RemixGlbUrl(
+                churchId, new Dictionary<string, float> { ["towerHeight"] = 12f }));
+            yield return Await(numeric);
+
+            Assert.AreEqual(baseline.Result.Length, numeric.Result.Length,
+                "12 is not \"12\"; the endpoint drops it and returns the baseline");
         }
 
         [UnityTest]
@@ -112,7 +172,7 @@ namespace Polyfork.Tests
             yield return Await(schemaTask);
             var schema = schemaTask.Result;
 
-            var url = client.RemixGlbUrl(DrumId, null);
+            var url = client.RemixGlbUrl(DrumId);
             var loadTask = loader.LoadAsync(url);
             yield return Await(loadTask);
 
@@ -151,7 +211,7 @@ namespace Polyfork.Tests
             var client = NewClient();
             var loader = new PolyforkGlbLoader(client);
 
-            var task = loader.LoadAsync(client.RemixGlbUrl(DrumId, null));
+            var task = loader.LoadAsync(client.RemixGlbUrl(DrumId));
             yield return Await(task);
 
             var go = task.Result;
@@ -228,9 +288,12 @@ namespace Polyfork.Tests
             var colors = schema.DefaultSlotColors();
             colors["body"] = Color.magenta;              // force the recolour + re-export path
 
+            var geometry = new PolyforkKnobValues();
+            geometry.SetNumber("tallness", 1.12f);
+
             var importTask = EditorTools.PolyforkAssetImporter.ImportAsync(
                 client, loader, assetTask.Result, schema,
-                new Dictionary<string, float> { ["tallness"] = 1.12f },
+                geometry,
                 colors,
                 "Assets/Polyfork.Tests");
 

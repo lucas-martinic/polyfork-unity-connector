@@ -10,12 +10,19 @@ namespace Polyfork.EditorTools
     public sealed class PolyforkRemixSnapshot
     {
         public Dictionary<string, float> Ranges;
+
+        /// <summary>Structural choice and toggle knobs; geometry, like Ranges.</summary>
+        public Dictionary<string, string> Choices;
+        public Dictionary<string, bool> Toggles;
+
         public Dictionary<string, Color> SlotColors;
         public string Colorway;
 
         public PolyforkRemixSnapshot Clone() => new()
         {
             Ranges = new Dictionary<string, float>(Ranges),
+            Choices = new Dictionary<string, string>(Choices),
+            Toggles = new Dictionary<string, bool>(Toggles),
             SlotColors = new Dictionary<string, Color>(SlotColors),
             Colorway = Colorway
         };
@@ -24,12 +31,24 @@ namespace Polyfork.EditorTools
         public bool GeometryDiffers(PolyforkRemixSnapshot other)
         {
             if (other == null || Ranges.Count != other.Ranges.Count) return true;
+            if (Choices.Count != other.Choices.Count || Toggles.Count != other.Toggles.Count) return true;
 
             foreach (var kv in Ranges)
             {
                 if (!other.Ranges.TryGetValue(kv.Key, out var v)) return true;
                 if (!Mathf.Approximately(kv.Value, v)) return true;
             }
+
+            foreach (var kv in Choices)
+            {
+                if (!other.Choices.TryGetValue(kv.Key, out var v) || v != kv.Value) return true;
+            }
+
+            foreach (var kv in Toggles)
+            {
+                if (!other.Toggles.TryGetValue(kv.Key, out var v) || v != kv.Value) return true;
+            }
+
             return false;
         }
     }

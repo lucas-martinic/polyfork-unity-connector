@@ -24,7 +24,7 @@ namespace Polyfork.EditorTools
         public static void Open()
         {
             var window = GetWindow<PolyforkGalleryWindow>();
-            window.titleContent = new GUIContent("Polyfork");
+            PolyforkBrand.ApplyTitle(window, "Polyfork");
             window.minSize = new Vector2(720f, 420f);
             window.Show();
         }
@@ -61,6 +61,12 @@ namespace Polyfork.EditorTools
         /// can be applied in place instead of re-fetching the GLB.</summary>
         PolyforkColorSlots _previewSlots;
         readonly Dictionary<string, float> _ranges = new();
+
+        /// <summary>Structural choice and toggle knobs. The endpoint bakes these too, so
+        /// they move geometry exactly like a range does - just without a slider.</summary>
+        readonly Dictionary<string, string> _choices = new();
+        readonly Dictionary<string, bool> _toggles = new();
+
         readonly Dictionary<string, Color> _slotColors = new();
         string _colorway;
         string _colorwayKnob;
@@ -247,6 +253,8 @@ namespace Polyfork.EditorTools
             _previewedAssetId = null;      // a new asset should be framed, not inherit zoom
             _history.Clear();              // undo is per-asset; don't step back into another
             _ranges.Clear();
+            _choices.Clear();
+            _toggles.Clear();
             _slotColors.Clear();
             _colorway = null;
             _colorwayKnob = null;
@@ -278,6 +286,8 @@ namespace Polyfork.EditorTools
         void ResetKnobs()
         {
             _ranges.Clear();
+            _choices.Clear();
+            _toggles.Clear();
             _slotColors.Clear();
             _colorway = null;
             _colorwayKnob = null;
@@ -287,6 +297,12 @@ namespace Polyfork.EditorTools
             {
                 switch (knob.Support)
                 {
+                    case PolyforkKnobSupport.ServerRebuild when knob.Type == PolyforkKnobType.Choice:
+                        _choices[knob.Name] = knob.DefaultString ?? knob.Options.FirstOrDefault();
+                        break;
+                    case PolyforkKnobSupport.ServerRebuild when knob.Type == PolyforkKnobType.Toggle:
+                        _toggles[knob.Name] = knob.DefaultBool;
+                        break;
                     case PolyforkKnobSupport.ServerRebuild:
                         _ranges[knob.Name] = knob.DefaultFloat;
                         break;
@@ -307,6 +323,42 @@ namespace Polyfork.EditorTools
             _rebuildAt = EditorApplication.timeSinceStartup + (immediate ? 0d : 0.25d);
         }
 
+        /// <summary>
+        /// The geometry knobs to send, as the schema types them.
+        ///
+        /// Defaults are left out: they are what the baseline preview already is, so sending
+        /// them would turn a free file into a metered variant of itself. Ranges are put on
+        /// the server's grid first, so dragging converges on URLs other people have already
+        /// paid to bake.
+        /// </summary>
+        PolyforkKnobValues BuildGeometryValues()
+        {
+            var values = new PolyforkKnobValues();
+            if (_schema == null) return values;
+
+            foreach (var kv in _ranges)
+            {
+                if (!_schema.Knobs.TryGetValue(kv.Key, out var knob)) continue;
+                var snapped = knob.SnapToServerGrid(kv.Value);
+                if (!Mathf.Approximately(snapped, knob.SnapToServerGrid(knob.DefaultFloat)))
+                    values.SetNumber(kv.Key, snapped);
+            }
+
+            foreach (var kv in _choices)
+            {
+                if (!_schema.Knobs.TryGetValue(kv.Key, out var knob)) continue;
+                if (kv.Value != null && kv.Value != knob.DefaultString) values.SetChoice(kv.Key, kv.Value);
+            }
+
+            foreach (var kv in _toggles)
+            {
+                if (!_schema.Knobs.TryGetValue(kv.Key, out var knob)) continue;
+                if (kv.Value != knob.DefaultBool) values.SetBool(kv.Key, kv.Value);
+            }
+
+            return values;
+        }
+
         async Task RebuildPreviewAsync()
         {
             if (_selected == null) return;
@@ -316,15 +368,7 @@ namespace Polyfork.EditorTools
 
             try
             {
-                var payload = new Dictionary<string, float>();
-                if (_schema != null)
-                {
-                    foreach (var kv in _ranges)
-                    {
-                        if (_schema.Knobs.TryGetValue(kv.Key, out var knob) &&
-                            !Mathf.Approximately(kv.Value, knob.DefaultFloat)) payload[kv.Key] = kv.Value;
-                    }
-                }
+                var payload = BuildGeometryValues();
 
                 var url = payload.Count == 0 ? asset.PreviewGlb : _client.RemixGlbUrl(asset.Id, payload);
                 if (string.IsNullOrEmpty(url)) return;
@@ -388,6 +432,8 @@ namespace Polyfork.EditorTools
         PolyforkRemixSnapshot Snapshot() => new()
         {
             Ranges = new Dictionary<string, float>(_ranges),
+            Choices = new Dictionary<string, string>(_choices),
+            Toggles = new Dictionary<string, bool>(_toggles),
             SlotColors = new Dictionary<string, Color>(_slotColors),
             Colorway = _colorway
         };
@@ -403,6 +449,12 @@ namespace Polyfork.EditorTools
 
             _ranges.Clear();
             foreach (var kv in state.Ranges) _ranges[kv.Key] = kv.Value;
+
+            _choices.Clear();
+            foreach (var kv in state.Choices) _choices[kv.Key] = kv.Value;
+
+            _toggles.Clear();
+            foreach (var kv in state.Toggles) _toggles[kv.Key] = kv.Value;
 
             _slotColors.Clear();
             foreach (var kv in state.SlotColors) _slotColors[kv.Key] = kv.Value;
@@ -461,6 +513,14 @@ namespace Polyfork.EditorTools
         void OnGUI()
         {
             HandleUndoCommands();
+
+            PolyforkBrand.DrawHeader(
+                _all.Count > 0 ? $"{_all.Count} assets" : "Browse, remix and import",
+                () =>
+                {
+                    if (GUILayout.Button("Account", EditorStyles.miniButton, GUILayout.Width(64f)))
+                        Application.OpenURL(PolyforkKeySettings.AccountUrl);
+                });
 
             DrawToolbar();
             DrawRateLimitBanner();
@@ -588,8 +648,9 @@ namespace Polyfork.EditorTools
             var selected = _selected == asset;
             if (Event.current.type == EventType.Repaint)
             {
+                var accent = PolyforkBrand.Accent;
                 var bg = selected
-                    ? new Color(0.24f, 0.42f, 0.72f, 0.55f)
+                    ? new Color(accent.r, accent.g, accent.b, 0.45f)
                     : new Color(0f, 0f, 0f, 0.16f);
                 EditorGUI.DrawRect(rect, bg);
             }
@@ -666,7 +727,11 @@ namespace Polyfork.EditorTools
             {
                 switch (knob.Type)
                 {
-                    case PolyforkKnobType.Choice: DrawColorwayKnob(knob); break;
+                    case PolyforkKnobType.Choice when knob.Support == PolyforkKnobSupport.LocalRecolor:
+                        DrawColorwayKnob(knob);
+                        break;
+                    case PolyforkKnobType.Choice: DrawChoiceKnob(knob); break;
+                    case PolyforkKnobType.Toggle: DrawToggleKnob(knob); break;
                     case PolyforkKnobType.Color: DrawColorKnob(knob); break;
                     case PolyforkKnobType.Range: DrawRangeKnob(knob); break;
                 }
@@ -677,7 +742,8 @@ namespace Polyfork.EditorTools
             {
                 EditorGUILayout.Space(2f);
                 EditorGUILayout.LabelField(
-                    $"{hidden} structural knob{(hidden == 1 ? "" : "s")} hidden - the remix endpoint does not bake them.",
+                    $"{hidden} knob{(hidden == 1 ? "" : "s")} hidden - Polyfork does not bake {(hidden == 1 ? "it" : "them")} " +
+                    "from a GLB. The asset's own module does; see the Local Baking sample.",
                     EditorStyles.miniLabel);
             }
 
@@ -715,19 +781,19 @@ namespace Polyfork.EditorTools
             {
                 foreach (var option in knob.Options)
                 {
-                    if (!_schema.TryGetPreset(option, out var slots)) continue;
+                    // The default option often has no preset: it IS the asset's authored
+                    // colours, which every colour knob already carries its own share of.
+                    // Skipping it would leave no way back to the model as published.
+                    var isAuthored = _schema.IsDefaultColorway(knob, option);
+                    if (!isAuthored && !_schema.TryGetPreset(option, out _)) continue;
 
-                    var swatch = Color.gray;
-                    foreach (var kv in slots)
-                    {
-                        if (PolyforkParams.TryParseHex(kv.Value, out var c)) { swatch = c; break; }
-                    }
+                    var swatch = SwatchFor(knob, option, isAuthored);
 
                     var rect = GUILayoutUtility.GetRect(26f, 20f, GUILayout.Width(26f));
                     EditorGUI.DrawRect(rect, swatch);
 
                     if (_colorway == option)
-                        EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - 2f, rect.width, 2f), new Color(0.35f, 0.62f, 1f));
+                        EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - 2f, rect.width, 2f), PolyforkBrand.Accent);
 
                     if (Event.current.type == EventType.MouseDown && rect.Contains(Event.current.mousePosition))
                     {
@@ -739,17 +805,58 @@ namespace Polyfork.EditorTools
             }
         }
 
-        void ApplyColorway(string knobName, string preset)
+        /// <summary>
+        /// The chip shown for a colourway option: its most prominent slot colour, or for the
+        /// authored default, that knob's own published hex.
+        /// </summary>
+        Color SwatchFor(PolyforkKnob knob, string option, bool isAuthored)
         {
-            if (!_schema.TryGetPreset(preset, out var slots)) return;
-
-            RecordUndo($"colorway:{preset}");
-
-            foreach (var kv in slots)
+            if (isAuthored)
             {
-                if (PolyforkParams.TryParseHex(kv.Value, out var c)) _slotColors[kv.Key] = c;
+                var defaults = _schema.DefaultSlotColors();
+                foreach (var slot in defaults)
+                {
+                    if (_schema.Knobs.TryGetValue(slot.Key, out var k) && k.Type == PolyforkKnobType.Color)
+                        return slot.Value;
+                }
+                return Color.gray;
             }
-            _colorway = preset;
+
+            if (_schema.TryGetPreset(option, out var slots))
+            {
+                foreach (var kv in slots)
+                {
+                    if (PolyforkParams.TryParseHex(kv.Value, out var c)) return c;
+                }
+            }
+            return Color.gray;
+        }
+
+        void ApplyColorway(string knobName, string option)
+        {
+            var knob = _schema.Knobs.TryGetValue(knobName, out var k) ? k : null;
+            var isAuthored = _schema.IsDefaultColorway(knob, option);
+
+            if (!isAuthored && !_schema.TryGetPreset(option, out _)) return;
+
+            RecordUndo($"colorway:{option}");
+
+            if (isAuthored)
+            {
+                // Back to the model as published: drop every override rather than writing
+                // the authored hexes back in, so the GLB's own colours show through.
+                _slotColors.Clear();
+                foreach (var kv in _schema.DefaultSlotColors()) _slotColors[kv.Key] = kv.Value;
+            }
+            else if (_schema.TryGetPreset(option, out var slots))
+            {
+                foreach (var kv in slots)
+                {
+                    if (PolyforkParams.TryParseHex(kv.Value, out var c)) _slotColors[kv.Key] = c;
+                }
+            }
+
+            _colorway = option;
             _colorwayKnob = knobName;
             ApplyColorsToPreview();
         }
@@ -779,6 +886,57 @@ namespace Polyfork.EditorTools
             _slotColors[knob.Name] = next;
             _colorway = null;                    // no longer a curated colourway
             ApplyColorsToPreview();
+        }
+
+        /// <summary>
+        /// A structural choice: piece, layout, tower height. Polyfork bakes these, so they
+        /// cost a round trip and an allowance exactly like a slider does.
+        ///
+        /// The option is sent as the literal string the schema published, never parsed into
+        /// a number. Options read "12"/"15"/"18" on plenty of assets and the server compares
+        /// them strictly, so a helpfully-converted 12 matches nothing and quietly returns
+        /// the default mesh.
+        /// </summary>
+        void DrawChoiceKnob(PolyforkKnob knob)
+        {
+            if (knob.Options.Count == 0) return;
+
+            _choices.TryGetValue(knob.Name, out var current);
+            var index = Mathf.Max(0, knob.Options.ToList().IndexOf(current ?? knob.DefaultString));
+
+            using var disabled = new EditorGUI.DisabledScope(IsRateLimited);
+
+            var label = new GUIContent(
+                knob.Label,
+                IsRateLimited ? "Rate limited - add an API key to keep remixing geometry." : knob.Describe);
+
+            EditorGUI.BeginChangeCheck();
+            var next = EditorGUILayout.Popup(label, index, knob.Options.Select(o => new GUIContent(o)).ToArray());
+            if (!EditorGUI.EndChangeCheck()) return;
+
+            RecordUndo($"choice:{knob.Name}");
+            _choices[knob.Name] = knob.Options[next];
+            QueuePreviewRebuild(immediate: true);   // one click, not a drag: no point debouncing
+        }
+
+        /// <summary>A structural toggle. Baked server-side, same as a choice.</summary>
+        void DrawToggleKnob(PolyforkKnob knob)
+        {
+            if (!_toggles.TryGetValue(knob.Name, out var current)) current = knob.DefaultBool;
+
+            using var disabled = new EditorGUI.DisabledScope(IsRateLimited);
+
+            var label = new GUIContent(
+                knob.Label,
+                IsRateLimited ? "Rate limited - add an API key to keep remixing geometry." : knob.Describe);
+
+            EditorGUI.BeginChangeCheck();
+            var next = EditorGUILayout.Toggle(label, current);
+            if (!EditorGUI.EndChangeCheck()) return;
+
+            RecordUndo($"toggle:{knob.Name}");
+            _toggles[knob.Name] = next;
+            QueuePreviewRebuild(immediate: true);
         }
 
         void DrawRangeKnob(PolyforkKnob knob)
@@ -839,7 +997,7 @@ namespace Polyfork.EditorTools
             Repaint();
 
             var result = await PolyforkAssetImporter.ImportAsync(
-                _client, _loader, asset, _schema, _ranges, _slotColors, _importFolder, _cts.Token);
+                _client, _loader, asset, _schema, BuildGeometryValues(), _slotColors, _importFolder, _cts.Token);
 
             if (result.Success)
             {

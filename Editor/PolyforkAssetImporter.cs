@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -43,7 +44,7 @@ namespace Polyfork.EditorTools
             PolyforkGlbLoader loader,
             PolyforkAsset asset,
             PolyforkParams schema,
-            IReadOnlyDictionary<string, float> rangeValues,
+            PolyforkKnobValues geometry,
             IReadOnlyDictionary<string, Color> slotColors,
             string folder = DefaultFolder,
             CancellationToken ct = default)
@@ -53,7 +54,7 @@ namespace Polyfork.EditorTools
 
             try
             {
-                var payload = StripDefaults(schema, rangeValues);
+                var payload = StripDefaults(schema, geometry);
                 var url = payload.Count == 0
                     ? asset.PreviewGlb
                     : client.RemixGlbUrl(asset.Id, payload);
@@ -141,19 +142,36 @@ namespace Polyfork.EditorTools
             }
         }
 
-        /// <summary>Only send knobs that differ from their published default.</summary>
-        static Dictionary<string, float> StripDefaults(
-            PolyforkParams schema, IReadOnlyDictionary<string, float> values)
+        /// <summary>
+        /// Only the geometry knobs that differ from their published default.
+        ///
+        /// The window has usually done this already; doing it again here keeps the contract
+        /// true for any other caller, and a default that slips through is not harmless - it
+        /// turns the free baseline preview into a metered variant identical to it.
+        /// </summary>
+        static PolyforkKnobValues StripDefaults(PolyforkParams schema, PolyforkKnobValues values)
         {
-            var payload = new Dictionary<string, float>();
+            var payload = new PolyforkKnobValues();
             if (values == null || schema == null) return payload;
 
-            foreach (var kv in values)
+            foreach (var name in values.Names)
             {
-                if (!schema.Knobs.TryGetValue(kv.Key, out var knob)) continue;
+                if (!schema.Knobs.TryGetValue(name, out var knob)) continue;
                 if (knob.Support != PolyforkKnobSupport.ServerRebuild) continue;
-                if (Mathf.Approximately(kv.Value, knob.DefaultFloat)) continue;
-                payload[kv.Key] = kv.Value;
+                if (!values.TryGet(name, out var raw)) continue;
+
+                switch (raw)
+                {
+                    case float f when !Mathf.Approximately(knob.SnapToServerGrid(f), knob.SnapToServerGrid(knob.DefaultFloat)):
+                        payload.SetNumber(name, knob.SnapToServerGrid(f));
+                        break;
+                    case string s when s != knob.DefaultString:
+                        payload.SetChoice(name, s);
+                        break;
+                    case bool b when b != knob.DefaultBool:
+                        payload.SetBool(name, b);
+                        break;
+                }
             }
             return payload;
         }
@@ -182,16 +200,26 @@ namespace Polyfork.EditorTools
         /// </summary>
         static string BuildFileName(
             PolyforkAsset asset,
-            Dictionary<string, float> payload,
+            PolyforkKnobValues payload,
             IReadOnlyDictionary<string, Color> slotColors,
             PolyforkParams schema)
         {
             var sb = new StringBuilder(Sanitise(asset.Title ?? asset.Id));
 
-            foreach (var kv in payload)
+            // Ordered, so the same variant always lands on the same filename rather than one
+            // per import depending on which knob happened to be enumerated first.
+            foreach (var name in payload.Names.OrderBy(n => n, StringComparer.Ordinal))
             {
-                sb.Append('_').Append(Sanitise(kv.Key)).Append('-')
-                  .Append(kv.Value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
+                if (!payload.TryGet(name, out var raw)) continue;
+
+                var text = raw switch
+                {
+                    float f => f.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture),
+                    bool b => b ? "on" : "off",
+                    _ => Sanitise(raw?.ToString() ?? "")
+                };
+
+                sb.Append('_').Append(Sanitise(name)).Append('-').Append(text);
             }
 
             if (NeedsRecolour(schema, slotColors)) sb.Append("_recoloured");

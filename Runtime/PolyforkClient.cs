@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
@@ -18,7 +19,7 @@ namespace Polyfork
     ///   GET /api/assets/{id}         one asset record
     ///   GET /api/kits                kit list
     ///   GET /cdn/{id}-params.json    machine-readable knob schema
-    ///   GET /cdn/{id}-remix.glb?p={} GLB rebuilt with the given range knobs
+    ///   GET /cdn/{id}-remix.glb?p={} GLB rebuilt with the given geometry knobs
     /// </summary>
     public class PolyforkClient
     {
@@ -60,7 +61,8 @@ namespace Polyfork
             return result;
         }
 
-        /// <summary>Walks every page. The catalogue is ~285 assets across 6 pages.</summary>
+        /// <summary>Walks every page. The catalogue was 480 assets across 10 pages on
+        /// 2026-08-13, and grows; the loop follows has_more rather than a fixed count.</summary>
         public async Task<List<PolyforkAsset>> GetAllAssetsAsync(
             IProgress<float> progress = null, CancellationToken ct = default)
         {
@@ -118,18 +120,49 @@ namespace Polyfork
         // ---------------------------------------------------------------- geometry
 
         /// <summary>
-        /// URL for a rebuilt GLB. Only range knobs are sent: the endpoint silently ignores
-        /// colour, choice and toggle values, so including them would just bust the cache
-        /// and imply a change that never happens.
+        /// URL for a rebuilt GLB.
+        ///
+        /// Send only geometry knobs. The endpoint drops everything else, and a dropped knob
+        /// is not an error: it returns the baseline mesh, so an ignored value looks exactly
+        /// like "nothing happened" while still costing a distinct cache entry.
+        ///
+        /// Types are carried through as the schema declares them, because the server
+        /// compares choice values strictly: a choice whose options are "12"/"15"/"18" does
+        /// not match the number 12, and silently falls back to the default.
         /// </summary>
+        public string RemixGlbUrl(string id, PolyforkKnobValues values)
+            => RemixUrl(id, values?.ToJson());
+
+        /// <summary>The asset at its published defaults: the baseline GLB, which is free.</summary>
+        public string RemixGlbUrl(string id) => RemixUrl(id, null);
+
+        /// <summary>Range-only overload, kept for callers that only drive sliders.</summary>
         public string RemixGlbUrl(string id, IReadOnlyDictionary<string, float> rangeValues)
         {
-            var baseUrl = $"{_baseUrl}/cdn/{id}-remix.glb";
-            if (rangeValues == null || rangeValues.Count == 0) return baseUrl;
+            if (rangeValues == null || rangeValues.Count == 0) return RemixUrl(id, null);
 
             var obj = new JObject();
             foreach (var kv in rangeValues) obj[kv.Key] = kv.Value;
-            return $"{baseUrl}?p={UnityWebRequest.EscapeURL(obj.ToString(Newtonsoft.Json.Formatting.None))}";
+            return RemixUrl(id, obj);
+        }
+
+        /// <summary>
+        /// Builds the request URL with its keys in a fixed order.
+        ///
+        /// The server sorts before it keys its cache, so ordering costs nothing there - but
+        /// the edge cache and this client's own cache key on the URL as written, and an
+        /// unordered dictionary would hand the same variant a different URL each session.
+        /// </summary>
+        string RemixUrl(string id, JObject payload)
+        {
+            var baseUrl = $"{_baseUrl}/cdn/{id}-remix.glb";
+            if (payload == null || payload.Count == 0) return baseUrl;
+
+            var ordered = new JObject();
+            foreach (var p in payload.Properties().OrderBy(p => p.Name, StringComparer.Ordinal))
+                ordered[p.Name] = p.Value;
+
+            return $"{baseUrl}?p={UnityWebRequest.EscapeURL(ordered.ToString(Newtonsoft.Json.Formatting.None))}";
         }
 
         public Task<byte[]> GetGlbAsync(string url, CancellationToken ct = default) => GetBytesAsync(url, ct);

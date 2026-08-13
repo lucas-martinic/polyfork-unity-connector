@@ -31,8 +31,9 @@ namespace Polyfork.EditorTools
         public static PolyforkApiKeyWindow Open()
         {
             var window = GetWindow<PolyforkApiKeyWindow>(utility: true, title: "Polyfork API key", focus: true);
-            window.minSize = new Vector2(420f, 250f);
-            window.maxSize = new Vector2(420f, 260f);
+            PolyforkBrand.ApplyTitle(window, "Polyfork API key");
+            window.minSize = new Vector2(420f, 274f);
+            window.maxSize = new Vector2(420f, 284f);
             window._key = PolyforkKeySettings.Get();
             window.ShowUtility();
             return window;
@@ -40,6 +41,7 @@ namespace Polyfork.EditorTools
 
         void OnGUI()
         {
+            PolyforkBrand.DrawHeader("Lifts the remix cap and unlocks paid downloads");
             EditorGUILayout.Space(6f);
 
             if (_wasRateLimited)

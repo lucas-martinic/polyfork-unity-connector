@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -49,44 +50,24 @@ namespace Polyfork
         public bool CanBake(PolyforkAsset asset, PolyforkParams schema)
             => asset != null && !string.IsNullOrEmpty(asset.PreviewGlb);
 
+        /// <summary>
+        /// PolyforkParams already classifies against this exact endpoint, so this is where
+        /// that verdict is read rather than restated. Keeping a second copy here is what let
+        /// the two drift apart when the endpoint learned to bake choice and toggle knobs.
+        /// </summary>
         public PolyforkKnobSupport Supports(PolyforkKnob knob)
-        {
-            if (knob == null) return PolyforkKnobSupport.Unsupported;
-
-            return knob.Type switch
-            {
-                // The only type the endpoint actually bakes.
-                PolyforkKnobType.Range => knob.HasRange
-                    ? PolyforkKnobSupport.ServerRebuild
-                    : PolyforkKnobSupport.Unsupported,
-
-                // Ignored by the endpoint, but reproducible here: the asset's distinct
-                // vertex colours are exactly its colour knobs' default hexes.
-                PolyforkKnobType.Color => PolyforkParams.IsHex(knob.DefaultString)
-                    ? PolyforkKnobSupport.LocalRecolor
-                    : PolyforkKnobSupport.Unsupported,
-
-                // A colourway resolves to slot colours, so it is reproducible. A structural
-                // choice is not; the schema tells them apart by whether every option names
-                // a preset, which PolyforkParams has already decided.
-                PolyforkKnobType.Choice => knob.Support == PolyforkKnobSupport.LocalRecolor
-                    ? PolyforkKnobSupport.LocalRecolor
-                    : PolyforkKnobSupport.Unsupported,
-
-                _ => PolyforkKnobSupport.Unsupported
-            };
-        }
+            => knob?.Support ?? PolyforkKnobSupport.Unsupported;
 
         public async Task<GameObject> BakeAsync(PolyforkBakeRequest request, CancellationToken ct = default)
         {
             if (request?.Asset == null) return null;
 
             var schema = request.Schema;
-            var effective = request.Values.WithoutDefaults(schema).Filter(schema, this);
+            var effective = SnapRanges(schema, request.Values.WithoutDefaults(schema).Filter(schema, this));
 
             var url = effective.Count == 0
                 ? request.Asset.PreviewGlb
-                : _client.RemixGlbUrl(request.Asset.Id, ToFloats(effective));
+                : _client.RemixGlbUrl(request.Asset.Id, effective);
 
             if (string.IsNullOrEmpty(url)) return null;
 
@@ -142,14 +123,27 @@ namespace Polyfork
             if (binding.HasSlots) binding.Apply(slots);
         }
 
-        static Dictionary<string, float> ToFloats(PolyforkKnobValues values)
+        /// <summary>
+        /// Puts every range value on the grid the server bakes on.
+        ///
+        /// Off-grid values are not wrong - the server snaps them itself - but it snaps
+        /// AFTER keying its cache on what was asked for, so an off-grid request pays for a
+        /// bake that an on-grid one would have got free.
+        /// </summary>
+        static PolyforkKnobValues SnapRanges(PolyforkParams schema, PolyforkKnobValues values)
         {
-            var floats = new Dictionary<string, float>();
-            foreach (var kv in values)
+            if (schema == null) return values;
+
+            var snapped = values.Clone();
+            foreach (var name in values.Names.ToArray())
             {
-                if (kv.Value is float f) floats[kv.Key] = f;
+                if (!schema.Knobs.TryGetValue(name, out var knob)) continue;
+                if (knob.Type != PolyforkKnobType.Range || !knob.HasRange) continue;
+                if (!values.TryGet(name, out var raw) || raw is not float f) continue;
+
+                snapped.SetNumber(name, knob.SnapToServerGrid(f));
             }
-            return floats;
+            return snapped;
         }
     }
 

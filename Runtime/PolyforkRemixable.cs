@@ -11,8 +11,11 @@ namespace Polyfork
     /// A spawned Polyfork asset that can be remixed at runtime through its real knobs.
     ///
     /// Two paths, matching what the platform actually supports:
-    ///   * range knobs  -> refetch /cdn/{id}-remix.glb?p={...} and swap the mesh (~120 ms).
-    ///   * colour knobs -> recolour vertex slots in place (same frame).
+    ///   * geometry knobs -> refetch /cdn/{id}-remix.glb?p={...} and swap the mesh (~120 ms).
+    ///     That is every knob marked affects:geometry - range, choice and toggle alike.
+    ///     A range knob that only deforms the mesh is interpolated instead (~0.05 ms);
+    ///     choice and toggle change topology by definition, so they always rebuild.
+    ///   * colour knobs   -> recolour vertex slots in place (same frame).
     /// Knobs the platform cannot honour are never exposed; see PolyforkKnobSupport.
     /// </summary>
     [DisallowMultipleComponent]
@@ -38,6 +41,11 @@ namespace Polyfork
         public IReadOnlyList<PolyforkKnob> RemixableKnobs { get; private set; } = Array.Empty<PolyforkKnob>();
 
         readonly Dictionary<string, float> _ranges = new();
+
+        /// <summary>Structural choice and toggle knobs. Baked server-side like ranges, but
+        /// never morphable: they change topology by definition.</summary>
+        readonly Dictionary<string, string> _choices = new();
+        readonly Dictionary<string, bool> _toggles = new();
         readonly Dictionary<string, Color> _slotColors = new();
         string _activeColorway;
 
@@ -104,6 +112,8 @@ namespace Polyfork
             RemixableKnobs = schema?.Remixable.ToArray() ?? Array.Empty<PolyforkKnob>();
 
             _ranges.Clear();
+            _choices.Clear();
+            _toggles.Clear();
             _slotColors.Clear();
             _activeColorway = null;
 
@@ -113,6 +123,12 @@ namespace Polyfork
                 {
                     switch (knob.Support)
                     {
+                        case PolyforkKnobSupport.ServerRebuild when knob.Type == PolyforkKnobType.Choice:
+                            _choices[knob.Name] = knob.DefaultString ?? knob.Options.FirstOrDefault();
+                            break;
+                        case PolyforkKnobSupport.ServerRebuild when knob.Type == PolyforkKnobType.Toggle:
+                            _toggles[knob.Name] = knob.DefaultBool;
+                            break;
                         case PolyforkKnobSupport.ServerRebuild:
                             _ranges[knob.Name] = knob.DefaultFloat;
                             break;
@@ -179,7 +195,7 @@ namespace Polyfork
         public void SetRange(string knobName, float value)
         {
             if (Schema == null || !Schema.Knobs.TryGetValue(knobName, out var knob)) return;
-            if (knob.Support != PolyforkKnobSupport.ServerRebuild) return;
+            if (knob.Support != PolyforkKnobSupport.ServerRebuild || !knob.HasRange) return;
 
             // A morphable knob is not snapped to stops: interpolation has no cache to hit,
             // so the value can follow the finger exactly.
@@ -198,6 +214,75 @@ namespace Polyfork
 
             _ranges[knobName] = snapped;
             _pendingRebuildAt = Time.unscaledTime + rebuildDebounceSeconds;
+        }
+
+        /// <summary>
+        /// Sets a structural choice knob, e.g. piece = "corner" or towerHeight = "18".
+        ///
+        /// The option is passed through exactly as the schema published it. Polyfork matches
+        /// choice values strictly, so "12" and 12 are not the same request: the second one
+        /// matches no option, falls back to the default and returns the baseline mesh.
+        /// </summary>
+        public void SetChoice(string knobName, string option)
+        {
+            if (Schema == null || !Schema.Knobs.TryGetValue(knobName, out var knob)) return;
+            if (knob.Support != PolyforkKnobSupport.ServerRebuild) return;
+            if (option == null || !knob.Options.Contains(option)) return;
+            if (_choices.TryGetValue(knobName, out var current) && current == option) return;
+
+            _choices[knobName] = option;
+            _pendingRebuildAt = Time.unscaledTime + rebuildDebounceSeconds;
+        }
+
+        /// <summary>Sets a structural toggle knob. Always a rebuild; never morphable.</summary>
+        public void SetToggle(string knobName, bool value)
+        {
+            if (Schema == null || !Schema.Knobs.TryGetValue(knobName, out var knob)) return;
+            if (knob.Support != PolyforkKnobSupport.ServerRebuild) return;
+            if (_toggles.TryGetValue(knobName, out var current) && current == value) return;
+
+            _toggles[knobName] = value;
+            _pendingRebuildAt = Time.unscaledTime + rebuildDebounceSeconds;
+        }
+
+        public string GetChoice(string knobName)
+            => _choices.TryGetValue(knobName, out var v) ? v : null;
+
+        public bool GetToggle(string knobName)
+            => _toggles.TryGetValue(knobName, out var v) && v;
+
+        /// <summary>
+        /// Everything currently off-default, typed as the schema declares it.
+        ///
+        /// Defaults are omitted rather than sent: the endpoint treats absent as default, and
+        /// an empty set means the free baseline preview instead of a metered variant of it.
+        /// </summary>
+        PolyforkKnobValues CurrentValues()
+        {
+            var values = new PolyforkKnobValues();
+            if (Schema == null) return values;
+
+            foreach (var kv in _ranges)
+            {
+                if (!Schema.Knobs.TryGetValue(kv.Key, out var knob)) continue;
+                var snapped = knob.SnapToServerGrid(kv.Value);
+                if (!Mathf.Approximately(snapped, knob.SnapToServerGrid(knob.DefaultFloat)))
+                    values.SetNumber(kv.Key, snapped);
+            }
+
+            foreach (var kv in _choices)
+            {
+                if (!Schema.Knobs.TryGetValue(kv.Key, out var knob)) continue;
+                if (kv.Value != null && kv.Value != knob.DefaultString) values.SetChoice(kv.Key, kv.Value);
+            }
+
+            foreach (var kv in _toggles)
+            {
+                if (!Schema.Knobs.TryGetValue(kv.Key, out var knob)) continue;
+                if (kv.Value != knob.DefaultBool) values.SetBool(kv.Key, kv.Value);
+            }
+
+            return values;
         }
 
         /// <summary>True when this knob is driven by interpolation rather than a rebuild.</summary>
@@ -265,13 +350,8 @@ namespace Polyfork
         /// <summary>Bakes this asset with one knob overridden, off-screen.</summary>
         async Task<GameObject> BakeAtAsync(PolyforkKnob knob, float value, CancellationToken ct)
         {
-            var values = new Dictionary<string, float>();
-            foreach (var kv in _ranges)
-            {
-                if (Schema.Knobs.TryGetValue(kv.Key, out var k) &&
-                    !Mathf.Approximately(kv.Value, k.DefaultFloat)) values[kv.Key] = kv.Value;
-            }
-            values[knob.Name] = value;
+            var values = CurrentValues();
+            values.SetNumber(knob.Name, knob.SnapToServerGrid(value));
 
             var url = Catalog.Client.RemixGlbUrl(Asset.Id, values);
             var bytes = await Catalog.Loader.GetBytesAsync(url, ct);
@@ -316,7 +396,7 @@ namespace Polyfork
             {
                 var count = Mathf.RoundToInt(span) + 1;
                 stops = new float[count];
-                for (var i = 0; i < count; i++) stops[i] = knob.Min + i;
+                for (var i = 0; i < count; i++) stops[i] = knob.SnapToServerGrid(knob.Min + i);
             }
             else
             {
@@ -327,6 +407,7 @@ namespace Polyfork
                     var v = Mathf.Lerp(knob.Min, knob.Max, i / (float)(count - 1));
                     if (knob.IsIntegral) v = Mathf.Round(v);
                     else if (knob.Step > 0f) v = Mathf.Round(v / knob.Step) * knob.Step;
+                    v = knob.SnapToServerGrid(v);
                     stops[i] = v;
                 }
             }
@@ -380,12 +461,7 @@ namespace Polyfork
             if (speculationLeft <= 0) return;
 
             // Everything currently off-default forms the base each axis is explored from.
-            var basis = new Dictionary<string, float>();
-            foreach (var kv in _ranges)
-            {
-                if (Schema.Knobs.TryGetValue(kv.Key, out var k) &&
-                    !Mathf.Approximately(kv.Value, k.DefaultFloat)) basis[kv.Key] = kv.Value;
-            }
+            var basis = CurrentValues();
 
             foreach (var knob in Schema.All)
             {
@@ -399,9 +475,10 @@ namespace Polyfork
                 {
                     if (ct.IsCancellationRequested) return;
 
-                    var payload = new Dictionary<string, float>(basis);
-                    if (Mathf.Approximately(stop, knob.DefaultFloat)) payload.Remove(knob.Name);
-                    else payload[knob.Name] = stop;
+                    var payload = basis.Clone();
+                    if (Mathf.Approximately(stop, knob.SnapToServerGrid(knob.DefaultFloat)))
+                        payload.Remove(knob.Name);
+                    else payload.SetNumber(knob.Name, stop);
 
                     var url = payload.Count == 0
                         ? Catalog.BaseGlbUrl(Asset)
@@ -448,13 +525,7 @@ namespace Polyfork
             {
                 // Send only knobs that differ from their default: a smaller query is a
                 // better CDN cache key, and the endpoint treats absent as default anyway.
-                var payload = new Dictionary<string, float>();
-                foreach (var kv in _ranges)
-                {
-                    if (Schema.Knobs.TryGetValue(kv.Key, out var knob) &&
-                        Mathf.Approximately(kv.Value, knob.DefaultFloat)) continue;
-                    payload[kv.Key] = kv.Value;
-                }
+                var payload = CurrentValues();
 
                 var url = payload.Count == 0
                     ? Catalog.BaseGlbUrl(Asset)

@@ -49,6 +49,16 @@ namespace Polyfork
         /// <summary>"geometry", "colors", or null.</summary>
         public string Affects { get; private set; }
 
+        /// <summary>
+        /// True when Polyfork rebuilds geometry for this knob.
+        ///
+        /// The server reads a missing "affects" as "colors" (inc/remix.php,
+        /// remix_geo_params), so an unlabelled knob is NOT baked however numeric it looks.
+        /// Only geometry knobs reach the baker; everything else is applied here.
+        /// </summary>
+        public bool AffectsGeometry =>
+            string.Equals(Affects, "geometry", StringComparison.OrdinalIgnoreCase);
+
         public string Icon { get; private set; }
 
         public JToken DefaultValue { get; private set; }
@@ -76,6 +86,35 @@ namespace Polyfork
         public bool DefaultBool => DefaultValue?.Type == JTokenType.Boolean && DefaultValue.Value<bool>();
 
         public string DefaultString => DefaultValue?.Type == JTokenType.String ? DefaultValue.Value<string>() : null;
+
+        /// <summary>
+        /// Snaps a range value onto the grid the server bakes on.
+        ///
+        /// This mirrors remix_snap() in inc/remix.php exactly, and the match matters for
+        /// money rather than looks: the server canonicalises before it keys its cache, so a
+        /// value off the grid is baked as its snapped neighbour but requested under a URL
+        /// nobody else will ever ask for. The bake is shared; the cache hit is not. Snapping
+        /// here means two people who drag to "about the same place" send the same URL, which
+        /// is what makes a variant free the second time anyone wants it.
+        /// </summary>
+        public float SnapToServerGrid(float value)
+        {
+            if (!HasRange || Max <= Min) return Min;
+
+            value = Mathf.Clamp(value, Min, Max);
+
+            // A count-style range (portholes, windows, steps) only has integer geometry.
+            var isCount = IsWhole(Min) && IsWhole(Max) && Max - Min <= 8f;
+            var step = isCount ? 1d : (Max - Min) / 40d;
+
+            /* Away from zero, not to even. PHP rounds 10.5 up and .NET rounds it down to
+             * the even neighbour, so the default MidpointRounding would put the client one
+             * step off the server on exact half-steps - which integer count knobs land on
+             * all the time. */
+            var steps = Math.Round((value - Min) / step, MidpointRounding.AwayFromZero);
+            var snapped = Min + steps * step;
+            return (float)Math.Round(snapped, 4, MidpointRounding.AwayFromZero);
+        }
 
         internal static PolyforkKnob Parse(string name, JObject o)
         {
@@ -156,13 +195,17 @@ namespace Polyfork
         ///
         /// Classification is derived from the payload itself, and matches the verified
         /// behaviour of https://polyfork.dev/cdn/{id}-remix.glb?p={...}:
-        ///   * range  -> the endpoint rebuilds the mesh (and clamps to min/max).
-        ///   * color  -> the endpoint ignores it; applied locally by recolouring the
-        ///               vertex-colour slot whose default hex matches this knob's default.
-        ///   * choice -> local only when its options are exactly the keys of "presets",
-        ///               in which case selecting one writes several colour slots at once.
-        ///               Structural choices (piece, layout, ...) are unsupported.
-        ///   * toggle -> unsupported: ignored by the endpoint and topology-changing.
+        ///   * affects: geometry -> the endpoint rebuilds the mesh, whatever the type.
+        ///                          range, choice and toggle are all baked.
+        ///   * anything else     -> the endpoint drops it (a missing "affects" reads as
+        ///                          "colors" server-side), so it is applied here or not
+        ///                          at all.
+        ///   * color             -> recoloured locally by rewriting the vertex-colour slot
+        ///                          whose default hex matches this knob's default.
+        ///   * colourway choice  -> local: selecting one writes several colour slots at once.
+        ///
+        /// This is the SERVER path's view. A local baker runs the asset's own module and
+        /// honours everything, which is why IPolyforkBaker.Supports is what UI should ask.
         /// </summary>
         public static PolyforkParams Parse(string assetId, string json)
         {
@@ -204,28 +247,57 @@ namespace Polyfork
 
         PolyforkKnobSupport Classify(PolyforkKnob knob)
         {
-            switch (knob.Type)
+            // A colourway is decided before anything else: it is a choice knob that resolves
+            // to colours, so it is reproducible here and must never cost a bake.
+            if (knob.Type == PolyforkKnobType.Choice && IsColorway(knob))
+                return PolyforkKnobSupport.LocalRecolor;
+
+            // Geometry is the server's job, and the only thing it will act on.
+            if (knob.AffectsGeometry)
             {
-                case PolyforkKnobType.Range:
-                    // Verified: numeric ranges are the only knobs the remix endpoint bakes.
-                    return knob.HasRange ? PolyforkKnobSupport.ServerRebuild : PolyforkKnobSupport.Unsupported;
+                return knob.Type switch
+                {
+                    PolyforkKnobType.Range => knob.HasRange
+                        ? PolyforkKnobSupport.ServerRebuild
+                        : PolyforkKnobSupport.Unsupported,
 
-                case PolyforkKnobType.Color:
-                    // Needs a default hex to identify which vertex-colour slot it owns.
-                    return IsHex(knob.DefaultString)
-                        ? PolyforkKnobSupport.LocalRecolor
-                        : PolyforkKnobSupport.Unsupported;
+                    // Sent as the exact option string; the server compares strictly.
+                    PolyforkKnobType.Choice => knob.Options.Count > 0
+                        ? PolyforkKnobSupport.ServerRebuild
+                        : PolyforkKnobSupport.Unsupported,
 
-                case PolyforkKnobType.Choice:
-                    // A colourway iff every option names a preset.
-                    return knob.Options.Count > 0 && knob.Options.All(o => _presets.ContainsKey(o))
-                        ? PolyforkKnobSupport.LocalRecolor
-                        : PolyforkKnobSupport.Unsupported;
+                    PolyforkKnobType.Toggle => PolyforkKnobSupport.ServerRebuild,
 
-                default:
-                    return PolyforkKnobSupport.Unsupported;
+                    _ => PolyforkKnobSupport.Unsupported
+                };
             }
+
+            // Needs a default hex to identify which vertex-colour slot it owns.
+            if (knob.Type == PolyforkKnobType.Color && IsHex(knob.DefaultString))
+                return PolyforkKnobSupport.LocalRecolor;
+
+            return PolyforkKnobSupport.Unsupported;
         }
+
+        /// <summary>
+        /// A choice knob whose options name curated colour presets.
+        ///
+        /// The default option is frequently absent from "presets": it is the asset's
+        /// authored colours, which are already carried by each colour knob's own default,
+        /// so there is nothing to publish. Requiring every option to name a preset therefore
+        /// hid the colourway control on exactly the assets that only ship alternatives.
+        /// </summary>
+        bool IsColorway(PolyforkKnob knob)
+        {
+            if (knob.Options.Count == 0 || _presets.Count == 0) return false;
+
+            return knob.Options.Any(o => _presets.ContainsKey(o)) &&
+                   knob.Options.All(o => _presets.ContainsKey(o) || o == knob.DefaultString);
+        }
+
+        /// <summary>The authored colours a colourway option restores, or null if it names a preset.</summary>
+        public bool IsDefaultColorway(PolyforkKnob knob, string option)
+            => knob != null && option != null && option == knob.DefaultString && !_presets.ContainsKey(option);
 
         /// <summary>Accepts both #RRGGBB and the #RGB shorthand the catalogue uses.</summary>
         internal static bool IsHex(string s) =>

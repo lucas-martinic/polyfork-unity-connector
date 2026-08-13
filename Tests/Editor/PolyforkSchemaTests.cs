@@ -73,8 +73,25 @@ namespace Polyfork.Tests
             foreach (var name in new[] { "tallness", "facets", "taper" })
             {
                 Assert.AreEqual(PolyforkKnobSupport.ServerRebuild, schema.Knobs[name].Support,
-                    $"'{name}' is a range knob and is the only kind the remix endpoint bakes.");
+                    $"'{name}' is a geometry range knob, which the remix endpoint bakes.");
             }
+        }
+
+        /// <summary>
+        /// The server reads a missing "affects" as "colors" (inc/remix.php, remix_geo_params),
+        /// so a range knob that never says "geometry" is dropped. Sending it anyway would
+        /// spend a bake on a URL that returns the baseline mesh.
+        /// </summary>
+        [Test]
+        public void ARangeThatDoesNotDeclareGeometryIsNotSentToTheServer()
+        {
+            const string json = @"{""params"":{
+ ""wobble"":{""type"":""range"",""default"":0,""label"":""Wobble"",""min"":0,""max"":1}},
+""presets"":{},""rev"":1}";
+
+            var schema = PolyforkParams.Parse("x", json);
+            Assert.AreEqual(PolyforkKnobSupport.Unsupported, schema.Knobs["wobble"].Support);
+            CollectionAssert.DoesNotContain(schema.Remixable.Select(k => k.Name).ToList(), "wobble");
         }
 
         [Test]
@@ -92,21 +109,52 @@ namespace Polyfork.Tests
             Assert.AreEqual(PolyforkKnobSupport.LocalRecolor, Road().Knobs["colorway"].Support);
         }
 
+        /// <summary>
+        /// Structural choice and toggle knobs are baked, and were verified against the live
+        /// endpoint by hashing responses: on brick-church-6cf1af, towerHeight "12" and "18"
+        /// and rose=false each return a distinct GLB. They were hidden here for a long time
+        /// on the older assumption that only ranges were baked.
+        /// </summary>
         [Test]
-        public void StructuralKnobsAreHiddenRatherThanDead()
+        public void StructuralChoiceAndToggleKnobsAreBakedByTheServer()
         {
             var schema = Road();
 
-            // The endpoint ignores these and they change topology, so they cannot be
-            // emulated locally either. Showing them would be a control that does nothing.
-            Assert.AreEqual(PolyforkKnobSupport.Unsupported, schema.Knobs["piece"].Support);
-            Assert.AreEqual(PolyforkKnobSupport.Unsupported, schema.Knobs["lines"].Support);
+            Assert.AreEqual(PolyforkKnobSupport.ServerRebuild, schema.Knobs["piece"].Support);
+            Assert.AreEqual(PolyforkKnobSupport.ServerRebuild, schema.Knobs["lines"].Support);
 
             var remixable = schema.Remixable.Select(k => k.Name).ToList();
-            CollectionAssert.DoesNotContain(remixable, "piece");
-            CollectionAssert.DoesNotContain(remixable, "lines");
+            CollectionAssert.Contains(remixable, "piece");
+            CollectionAssert.Contains(remixable, "lines");
             CollectionAssert.Contains(remixable, "patchCount");
             CollectionAssert.Contains(remixable, "colorway");
+        }
+
+        /// <summary>
+        /// Seen live on regolith-terrain-blob-33148e and field-console-a92adc: "presets"
+        /// lists only the ALTERNATIVE schemes, because the default one is the asset's
+        /// authored colours and each colour knob already carries them. Demanding that every
+        /// option name a preset hid the colourway entirely on those assets.
+        /// </summary>
+        [Test]
+        public void AColorwayStaysLocalWhenItsDefaultOptionHasNoPreset()
+        {
+            const string json = @"{""params"":{
+ ""colorway"":{""type"":""choice"",""default"":""rust-regolith"",""label"":""Colorway"",
+   ""affects"":""colors"",""options"":[""rust-regolith"",""pale-dust"",""basalt-grey""]},
+ ""dust"":{""type"":""color"",""default"":""#9a7b5f"",""label"":""Dust""}},
+""presets"":{
+ ""pale-dust"":{""dust"":""#c9b79a""},
+ ""basalt-grey"":{""dust"":""#6b6b6b""}},
+""rev"":1}";
+
+            var schema = PolyforkParams.Parse("regolith-terrain-blob-33148e", json);
+
+            Assert.AreEqual(PolyforkKnobSupport.LocalRecolor, schema.Knobs["colorway"].Support,
+                "the colourway must stay usable, and must never cost a bake");
+            Assert.IsTrue(schema.IsDefaultColorway(schema.Knobs["colorway"], "rust-regolith"),
+                "the default option restores the authored colours rather than naming a preset");
+            Assert.IsFalse(schema.IsDefaultColorway(schema.Knobs["colorway"], "pale-dust"));
         }
 
         [Test]
@@ -137,7 +185,7 @@ namespace Polyfork.Tests
         }
 
         [Test]
-        public void RemixUrlCarriesOnlyRangeKnobs()
+        public void RemixUrlCarriesRangeKnobs()
         {
             var client = new PolyforkClient();
             var url = client.RemixGlbUrl("plastic-drum-da992f",
@@ -147,10 +195,68 @@ namespace Polyfork.Tests
             StringAssert.Contains("tallness", url);
         }
 
+        /// <summary>
+        /// The server compares choice values with a strict in_array, so an option published
+        /// as "12" does not match the number 12 - it falls through to the default and returns
+        /// the baseline mesh, which on screen is indistinguishable from a broken control.
+        /// </summary>
+        [Test]
+        public void ChoiceAndToggleKeepTheTypesTheSchemaPublished()
+        {
+            var values = new PolyforkKnobValues();
+            values.SetChoice("towerHeight", "12");
+            values.SetBool("rose", false);
+            values.SetNumber("bays", 4f);
+
+            var query = Uri.UnescapeDataString(new PolyforkClient().RemixGlbUrl("brick-church-6cf1af", values));
+
+            StringAssert.Contains("\"towerHeight\":\"12\"", query, "a choice is sent as its literal option string");
+            StringAssert.Contains("\"rose\":false", query, "a toggle is sent as a JSON boolean");
+            StringAssert.Contains("\"bays\":4", query);
+        }
+
+        [Test]
+        public void RemixUrlKeysAreOrderedSoTheSameVariantIsTheSameUrl()
+        {
+            var a = new PolyforkKnobValues();
+            a.SetNumber("taper", 0.1f);
+            a.SetNumber("facets", 12f);
+
+            var b = new PolyforkKnobValues();
+            b.SetNumber("facets", 12f);
+            b.SetNumber("taper", 0.1f);
+
+            var client = new PolyforkClient();
+            Assert.AreEqual(client.RemixGlbUrl("x", a), client.RemixGlbUrl("x", b),
+                "insertion order must not produce two URLs for one variant, or the cache misses");
+        }
+
+        /// <summary>
+        /// Mirrors remix_snap() in inc/remix.php. The server snaps AFTER keying its cache,
+        /// so an off-grid request pays for a bake an on-grid one would have got free.
+        /// </summary>
+        [Test]
+        public void RangeValuesSnapToTheGridTheServerBakesOn()
+        {
+            var schema = Drum();
+
+            // facets is 8..15: whole bounds, span 7, so a count-style knob with step 1.
+            var facets = schema.Knobs["facets"];
+            Assert.AreEqual(12f, facets.SnapToServerGrid(11.6f), 1e-4f);
+            Assert.AreEqual(15f, facets.SnapToServerGrid(99f), 1e-4f, "clamped to max");
+            Assert.AreEqual(8f, facets.SnapToServerGrid(-3f), 1e-4f, "clamped to min");
+
+            // tallness is 0.7..1.12: fractional, so 40 steps of 0.0105.
+            var tallness = schema.Knobs["tallness"];
+            Assert.AreEqual(0.7f + 0.0105f, tallness.SnapToServerGrid(0.712f), 1e-4f);
+            Assert.AreEqual(tallness.SnapToServerGrid(0.7106f), tallness.SnapToServerGrid(0.7109f),
+                "two drags to nearly the same place must produce one variant, not two");
+        }
+
         [Test]
         public void RemixUrlWithNoParamsIsTheBareEndpoint()
         {
-            var url = new PolyforkClient().RemixGlbUrl("x", null);
+            var url = new PolyforkClient().RemixGlbUrl("x");
             Assert.IsFalse(url.Contains("?"), "an empty param set should not add a query string");
         }
 

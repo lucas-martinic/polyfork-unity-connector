@@ -52,25 +52,32 @@ into the scene, then committed. Use one of these instead:
 
 Polyfork publishes four knob types, and the remix endpoint does **not** treat them alike.
 
-| Type | Count\* | Path | Cost |
-| --- | --- | --- | --- |
-| `range` | 112 | Server rebuild via `-remix.glb?p={…}` | ~120 ms |
-| `color` | 239 | Local vertex-colour slot remap | instant |
-| `choice` (colourway) | ~40 | Local, expands a preset across slots | instant |
-| `choice`/`toggle` with `affects: geometry` | ~35 | **Hidden** — see below | — |
+| Type | Path | Cost |
+| --- | --- | --- |
+| any type with `affects: geometry` | Server rebuild via `-remix.glb?p={…}` | ~120 ms |
+| `color` | Local vertex-colour slot remap | instant |
+| `choice` (colourway) | Local, expands a preset across slots | instant |
+| anything else | Not sent — see below | — |
 
-<sub>\* across a 40-asset sample of the remixable assets.</sub>
+**What decides the path is `affects`, not the type.** A knob marked `affects: geometry` is
+rebuilt by Polyfork whether it is a `range`, a `choice` or a `toggle`. Everything else is
+applied here or not at all, because the server reads a missing `affects` as `colors`.
 
 ### Why colours are local
 
-The remix endpoint honours **only numeric `range` knobs**. Colour, choice and toggle values
-are accepted and silently ignored — the GLB comes back byte-identical:
+Colour values are accepted by the endpoint and silently ignored — the GLB comes back
+byte-identical, while a geometry knob of any type rebuilds it:
 
 ```
-{}                        6D103CFE…  45096 b
-{"body":"#FF6600"}        6D103CFE…  45096 b   ← ignored
-{"tallness":1.12}         3A1FA1AC…  53160 b   ← rebuilt
+{}                          6D103CFE…  45096 b
+{"body":"#FF6600"}          6D103CFE…  45096 b   ← ignored, colour is local
+{"tallness":1.12}           3A1FA1AC…  53160 b   ← rebuilt (range)
+{"towerHeight":"12"}        4299F327…  65960 b   ← rebuilt (choice)
+{"rose":false}              75FF9147…  62648 b   ← rebuilt (toggle)
 ```
+
+Note the quotes on `"12"`. Options are compared strictly, so sending the number `12` for an
+option published as the string `"12"` matches nothing and returns the baseline mesh.
 
 So colours are applied client-side, and the mapping is exact rather than approximate. A
 Polyfork asset is one mesh with baked `COLOR_0` vertex colours, and the set of distinct
@@ -83,18 +90,29 @@ your colours in `COLOR_0` and stays correct outside Unity.
 
 ### Why some knobs are hidden
 
-`choice`/`toggle` knobs marked `affects: geometry` (`piece`, `layout`, `lines`) change
-topology. The endpoint ignores them and they cannot be emulated locally, so they are not
-drawn rather than shown as controls that do nothing. The gallery says how many were hidden.
+A knob that does not declare `affects: geometry` and is not a colour cannot be honoured
+from a GLB: the endpoint drops it, and there is no local equivalent. Those are not drawn,
+rather than shown as controls that do nothing, and the gallery says how many there were.
 
-**If the endpoint starts baking non-range knobs, no client change is needed** — reclassify
-in `PolyforkParams.Classify` and they appear.
+The asset's own module honours all of them, which is what the *Local Baking* sample is for.
+
+Classification lives in one place, `PolyforkParams.Classify`. If the platform's behaviour
+changes again, that is the only thing to edit — `PolyforkServerBaker` reads its verdict
+rather than keeping a second copy.
+
+### Range values are snapped
+
+Range values are put on the same grid the server bakes on (40 steps across `min`..`max`, or
+whole numbers for a count-style knob). The server canonicalises *after* it keys its cache,
+so an off-grid value is baked as its snapped neighbour but requested under a URL nobody
+else will ever ask for: the bake is shared, the cache hit is not.
 
 ### Endpoint behaviour worth knowing
 
 - Values clamp to `min`/`max` (`patchCount=99` == `patchCount=10`).
-- Unknown knobs, malformed JSON and non-range types fall back to the baseline GLB rather
-  than erroring, so a bad request looks like "nothing happened".
+- Unknown knobs, malformed JSON, non-geometry knobs and choice values that match no option
+  all fall back to the baseline GLB rather than erroring, so a bad request looks like
+  "nothing happened".
 - The `x-remix` response header reports `exact` vs `fallback`; the client surfaces it.
 
 ## Runtime API
