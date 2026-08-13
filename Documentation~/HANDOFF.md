@@ -121,10 +121,25 @@ the Polyfork mark. See `CHANGELOG.md`.
    the first thing to do, before tagging anything.
 2. **Tag `v0.2.0`** once the tests pass, so the install URL can be pinned with `#v0.2.0`.
    Deliberately not tagged yet: a tag reads as a tested release.
-3. **Verify on macOS.** Static analysis says it is clean: all paths go through
-   `Path.Combine`, no `Process.Start`, no Windows APIs, and the optional QuickJS binary is
-   a universal `x86_64 + arm64` build. But it has never been *run* on a Mac. This is the
-   one open risk on the "does it work everywhere" question.
+3. **Verify on macOS.** Still never *run* on a Mac, but the specific risks were checked on
+   2026-08-13 and none of them bit:
+   - PuerTS 3.0.2's `PapiQuickjs.bundle` is a **universal binary** (`x86_64 + arm64`), so
+     local baking works natively on Apple Silicon and under an Intel editor alike.
+   - The package has no `Process.Start`, no `DllImport`, no registry or `SpecialFolder`
+     access, no platform conditionals, and no backslash path literals; every path is built
+     with `Path.Combine`, and the `file:` package URLs use forward slashes as UPM requires.
+   - `PolyforkTar` was checked against both real archives for the two things that break on
+     a case-insensitive filesystem: names colliding only by case, and absolute or `../`
+     entries. Neither archive has any.
+   - The vertex-colour shader is a plain vertex/fragment pass over `UnityCG` with no
+     surface-shader or built-in-lighting dependency, which is what lets it compile for Metal.
+
+   **The open macOS question is Gatekeeper, and it cuts the other way from what you would
+   expect.** Files written by our own installer do not get the `com.apple.quarantine`
+   attribute; files a browser downloads do. So the one-button install is likely to work
+   where the *manual* route - download the tarball in Safari, unpack it - may leave a
+   quarantined `.bundle` that macOS refuses to load. If a Mac user reports the engine never
+   registering, `xattr -d com.apple.quarantine` on the bundle is the first thing to try.
 4. **Decide on distribution.** The git URL works today and is clean now that the package
    has its own repo. OpenUPM is the next step and wants version tags plus an OSI licence,
    both of which are in place bar the tag. Asset Store needs a publisher account, different
