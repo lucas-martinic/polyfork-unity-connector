@@ -47,6 +47,23 @@ Shader "Polyfork/Vertex Color"
 
             fixed4 _Tint;
 
+            /* Taken from public/viewer.js: HemisphereLight(0xffffff, 0xb8b0a4, 1.15), a key
+             * DirectionalLight(0xfff2e0, 2.4) at (4,7,5) and a rim (0xdfe8ff, 0.9) at
+             * (-5,4,-6). The intensities are scaled down from three.js's, whose lighting is
+             * physical and whose renderer tone maps; these land in the same place by eye
+             * without blowing the lit side to white. */
+            #define SKY_COLOR      float3(1.00, 1.00, 1.00)
+            #define GROUND_COLOR   float3(0.72, 0.69, 0.64)
+            #define HEMI_INTENSITY 0.52
+
+            #define KEY_COLOR      float3(1.00, 0.949, 0.878)
+            #define KEY_DIR        float3(4.0, 7.0, 5.0)
+            #define KEY_INTENSITY  0.78
+
+            #define RIM_COLOR      float3(0.874, 0.910, 1.00)
+            #define RIM_DIR        float3(-5.0, 4.0, -6.0)
+            #define RIM_INTENSITY  0.20
+
             v2f vert (appdata v)
             {
                 v2f o;
@@ -58,14 +75,23 @@ Shader "Polyfork/Vertex Color"
 
             fixed4 frag (v2f i) : SV_Target
             {
-                /* A fixed key light rather than the scene's. The preview is an isolated
-                 * utility scene with its own lighting, and these assets are flat-shaded, so
-                 * a stable wrap term keeps every face distinguishable without making the
-                 * result depend on whatever the project's lighting happens to be. */
+                /* The store viewer's rig, written out rather than sampled from the scene.
+                 * The preview is an isolated utility scene with its own lighting, so
+                 * matching public/viewer.js here is what keeps an asset looking the same in
+                 * the editor as on its own store page.
+                 *
+                 * Real N dot L, not the wrap term this used to have. Wrapping maps the whole
+                 * sphere into [0,1] and never lets anything go properly dark, so every face
+                 * came out within a hair of every other and the model read as flat. Clamped,
+                 * the far side falls to the hemisphere term alone - which is what makes a
+                 * shaded side look shaded. */
                 float3 n = normalize(i.normal);
-                float ndl = saturate(dot(n, normalize(float3(0.3, 1.0, 0.35))) * 0.5 + 0.5);
 
-                fixed3 lit = i.color.rgb * _Tint.rgb * lerp(0.62, 1.12, ndl);
+                float3 hemi = lerp(GROUND_COLOR, SKY_COLOR, n.y * 0.5 + 0.5) * HEMI_INTENSITY;
+                float3 key  = KEY_COLOR * saturate(dot(n, normalize(KEY_DIR))) * KEY_INTENSITY;
+                float3 rim  = RIM_COLOR * saturate(dot(n, normalize(RIM_DIR))) * RIM_INTENSITY;
+
+                fixed3 lit = i.color.rgb * _Tint.rgb * (hemi + key + rim);
                 return fixed4(lit, 1);
             }
             ENDCG

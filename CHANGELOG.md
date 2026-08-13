@@ -5,6 +5,21 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-08-13
+
+### Changed
+
+- **The model is properly shaded, dark on the side away from the light.** The shader used a
+  wrap term — `dot(n, l) * 0.5 + 0.5` — which maps the whole sphere into `[0,1]` and never
+  lets anything go properly dark. Every face landed within a hair of every other and the
+  model read as flat. It now uses real clamped `N·L`, so the far side falls to the
+  hemisphere term alone: measured, the multiplier runs 1.28 facing the key light down to
+  0.44 facing away, against 1.12 to 0.62 before.
+
+  The three lights are the store viewer's, written into the shader rather than sampled from
+  the scene, since the preview is an isolated utility scene with its own lighting and the
+  point is for an asset to look the same here as on its store page.
+
 ## [0.6.0] - 2026-08-13
 
 ### Changed
