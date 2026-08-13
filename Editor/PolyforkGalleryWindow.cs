@@ -1155,7 +1155,7 @@ namespace Polyfork.EditorTools
                         EditorStyles.miniLabel);
                 }
                 else if (GUILayout.Button(
-                             new GUIContent("Make bakes instant",
+                             new GUIContent("Setup",
                                  "Geometry is currently rebuilt by polyfork.dev: about 120 ms, and " +
                                  "metered. A local engine makes it instant and free."),
                              EditorStyles.toolbarButton))

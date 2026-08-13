@@ -268,7 +268,7 @@ namespace Polyfork.EditorTools
             if (!PolyforkJsRuntimeProvider.IsAvailable)
             {
                 EditorGUILayout.Space(2f);
-                if (GUILayout.Button("Make bakes instant and free \u2192", EditorStyles.miniLabel))
+                if (GUILayout.Button("Set up instant bakes \u2192", EditorStyles.miniLabel))
                     PolyforkLocalBakingWindow.Open();
             }
 

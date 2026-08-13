@@ -5,6 +5,24 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3] - 2026-08-13
+
+### Fixed
+
+- **0.3.2 did not compile.** The setup window awaited `SendWebRequestAsync`, which lives in
+  an `internal` class in the runtime assembly and is therefore invisible from the editor
+  assembly. It has its own small awaiter now, which suits it: that download talks to
+  github.com and deliberately shares no transport with the Polyfork client. Widening the
+  runtime's API, or granting the editor assembly blanket access to every internal, would
+  both have been larger changes than the twenty lines it took.
+- The setup window's package-manager poll is now removed when the window closes, instead of
+  repainting a destroyed window every tick for the rest of the session.
+
+### Changed
+
+- `Polyfork ▸ Make Bakes Instant…` is now **`Polyfork ▸ Setup`**, and the gallery's status
+  bar button matches. The explanation moved to the tooltip.
+
 ## [0.3.2] - 2026-08-13
 
 ### Fixed

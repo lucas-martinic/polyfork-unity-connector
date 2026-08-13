@@ -45,7 +45,8 @@ Unity 6000.0 or newer. The two dependencies are resolved from Unity's own regist
 Polyfork ▸ Browse Assets                          Ctrl/Cmd + Shift + P
 Polyfork ▸ API Key…
 Polyfork ▸ Welcome
-Polyfork ▸ Diagnostics ▸ Smoke-test local baking  (needs the Local Baking sample)
+Polyfork ▸ Setup                                  install a JS engine for instant bakes
+Polyfork ▸ Diagnostics ▸ Smoke-test local baking  (needs a JS engine)
 ```
 
 The gallery is also under **Window ▸ Polyfork**, where Unity users tend to look for a
@@ -222,7 +223,7 @@ it counts against your hourly allowance. Install a JavaScript engine and the edi
 asset's **own `createAsset()` module** instead — the same program the store runs — so a
 slider costs CPU rather than a request.
 
-**Polyfork ▸ Make Bakes Instant…** has an *Install PuerTS for me* button that downloads a
+**Polyfork ▸ Setup** has an *Install PuerTS for me* button that downloads a
 matched pair and adds both to the project. It asks first, and tells you what it is about to
 fetch and from where.
 

@@ -27,11 +27,11 @@ namespace Polyfork.EditorTools
         const string QuickJsPackage = "com.tencent.puerts.quickjs";
         const string ReleasesUrl = "https://github.com/Tencent/puerts/releases";
 
-        [MenuItem("Polyfork/Make Bakes Instant…", priority = 3)]
+        [MenuItem("Polyfork/Setup", priority = 3)]
         public static void Open()
         {
             var window = GetWindow<PolyforkLocalBakingWindow>(utility: true, title: "Polyfork", focus: true);
-            PolyforkBrand.ApplyTitle(window, "Instant bakes");
+            PolyforkBrand.ApplyTitle(window, "Polyfork setup");
             var size = new Vector2(520f, 400f);
             window.minSize = size;
             window.maxSize = size;
@@ -363,14 +363,19 @@ namespace Polyfork.EditorTools
         }
 
         /* Its own transport, deliberately. PolyforkClient attaches the Polyfork API key to
-         * every request it makes, and these requests go to github.com. */
+         * every request it makes, and these requests go to github.com.
+         *
+         * Its own awaiter too: the one in PolyforkClient sits in an internal class, so it is
+         * invisible across the assembly boundary. Widening it, or granting the editor
+         * assembly blanket access to every internal, would both be larger changes than the
+         * twenty lines below. */
         static async Task<byte[]> DownloadAsync(string url)
         {
             using var req = UnityWebRequest.Get(url);
             req.SetRequestHeader("User-Agent", "polyfork-unity-connector");   // GitHub rejects requests without one
             req.timeout = 300;
 
-            await req.SendWebRequestAsync();
+            await SendAsync(req);
 
             if (req.result != UnityWebRequest.Result.Success)
                 throw new Exception($"{url}: {req.error}");
@@ -378,8 +383,28 @@ namespace Polyfork.EditorTools
             return req.downloadHandler.data;
         }
 
+        static Task SendAsync(UnityWebRequest request)
+        {
+            var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var op = request.SendWebRequest();
+
+            // Already finished from cache: completed callbacks do not fire for those.
+            if (op.isDone) tcs.TrySetResult(true);
+            else op.completed += _ => tcs.TrySetResult(true);
+
+            return tcs.Task;
+        }
+
         static async Task<string> DownloadStringAsync(string url)
             => Encoding.UTF8.GetString(await DownloadAsync(url));
+
+        void OnDisable()
+        {
+            /* The install keeps going if the window is closed - Unity owns the request once
+             * it is made - but this poll must stop, or it calls Repaint on a destroyed
+             * window every editor tick for the rest of the session. */
+            EditorApplication.update -= PollAdd;
+        }
 
         void OnInspectorUpdate() => Repaint();   // so it flips to green without being poked
     }
