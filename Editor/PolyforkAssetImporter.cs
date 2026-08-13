@@ -110,11 +110,13 @@ namespace Polyfork.EditorTools
                     {
                         slots.Apply(slotColors);
 
+                        // Same reason as the local path: the recoloured mesh IS its colours.
                         var export = new GameObjectExport(
                             new ExportSettings
                             {
                                 Format = GltfFormat.Binary,
-                                Deterministic = true
+                                Deterministic = true,
+                                PreservedVertexAttributes = VertexAttributeUsage.Color
                             });
 
                         export.AddScene(new[] { staging }, asset.Title ?? asset.Id);
@@ -184,10 +186,19 @@ namespace Polyfork.EditorTools
                 var assetPath = AssetDatabase.GenerateUniqueAssetPath(
                     Path.Combine(folder, fileName).Replace('\\', '/'));
 
+                /* PreservedVertexAttributes is not optional here.
+                 *
+                 * glTFast drops vertex attributes it judges unused, and it judges by the
+                 * material: "vertex colors are discarded when the assigned material(s) do not
+                 * use them". A Polyfork asset keeps its ENTIRE appearance in COLOR_0, and the
+                 * material carrying it is our own shader, which glTFast has never heard of -
+                 * so the exporter helpfully threw away the only thing that made the model
+                 * look like anything, and the import arrived white. */
                 var export = new GameObjectExport(new ExportSettings
                 {
                     Format = GltfFormat.Binary,
-                    Deterministic = true
+                    Deterministic = true,
+                    PreservedVertexAttributes = VertexAttributeUsage.Color
                 });
                 export.AddScene(new[] { staging }, asset.Title ?? asset.Id);
 

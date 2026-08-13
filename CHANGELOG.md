@@ -5,6 +5,20 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-08-13
+
+### Fixed
+
+- **A locally imported remix arrived white.** glTFast's exporter drops vertex attributes it
+  judges unused, and it judges by the material: *"vertex colors are discarded when the
+  assigned material(s) do not use them."* A Polyfork asset keeps its entire appearance in
+  `COLOR_0`, and the material carrying it is our own shader, which glTFast has never heard
+  of — so the export threw away the only thing making the model look like anything, and the
+  `.glb` landed in the project as untinted geometry.
+
+  Both export paths now set `PreservedVertexAttributes = VertexAttributeUsage.Color`. The
+  recolour path was exposed to the same rule and is fixed with it.
+
 ## [0.7.0] - 2026-08-13
 
 ### Changed
