@@ -78,6 +78,8 @@ namespace Polyfork.EditorTools
         /// <summary>True while the remix view has the window to itself.</summary>
         bool _remixing;
 
+        double _lastCountdownRepaint;
+
         bool _previewDirty;
         double _rebuildAt;
         bool _rebuilding;
@@ -262,7 +264,15 @@ namespace Polyfork.EditorTools
                 _ = RebuildPreviewAsync();
             }
 
-            if (IsRateLimited) Repaint();   // keep the countdown ticking
+            /* Keep the countdown ticking, four times a second rather than on every editor
+             * update. Repaint re-renders the 3D preview, so doing it at tick rate burns a
+             * core continuously - and it burns hardest exactly when the allowance is spent,
+             * which is when the window has the least to show for it. */
+            if (IsRateLimited && EditorApplication.timeSinceStartup - _lastCountdownRepaint > 0.25d)
+            {
+                _lastCountdownRepaint = EditorApplication.timeSinceStartup;
+                Repaint();
+            }
         }
 
         // =====================================================================
@@ -911,7 +921,19 @@ namespace Polyfork.EditorTools
 
             if (Event.current.type == EventType.MouseDown && rect.Contains(Event.current.mousePosition))
             {
+                // Single click selects and previews; double click goes straight to remixing,
+                // which is what opening a thing means everywhere else in the editor.
+                var openIt = Event.current.clickCount >= 2 && _selected == asset;
+
                 Select(asset);
+
+                if (openIt)
+                {
+                    _remixing = true;
+                    Event.current.Use();
+                    GUIUtility.ExitGUI();
+                }
+
                 Event.current.Use();
             }
         }

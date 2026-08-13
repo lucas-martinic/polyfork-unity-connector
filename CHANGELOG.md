@@ -5,6 +5,29 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.4] - 2026-08-13
+
+### Fixed
+
+- **The editor got heavier the longer the window stayed open.** Every bake creates a fresh
+  `Mesh` per part and a `Material`, and destroying a `GameObject` destroys its components but
+  not the assets they point at — so each rebuild leaked both. At 30-60 ms a bake with a
+  slider being dragged, that is dozens of leaked objects a second. The preview now frees what
+  it generated, guarded by `EditorUtility.IsPersistent` so nothing saved in the project is
+  ever touched.
+- **The window repainted on every editor tick while rate limited**, purely to advance a
+  countdown — and a repaint re-renders the 3D preview, so it burned a core continuously, and
+  hardest exactly when the allowance was spent and there was least to show. Four times a
+  second now.
+- **The contact shadow read as an orange disc.** It was warm-tinted, which turns orange when
+  blended over the cream background, and its falloff held a flat plateau before fading, which
+  drew a visible rim. Pure black now, falling off from the centre with no flat core.
+
+### Added
+
+- **Double-clicking an asset opens the remix screen**, which is what opening a thing means
+  everywhere else in the editor. Single click still just selects and previews.
+
 ## [0.5.3] - 2026-08-13
 
 ### Fixed

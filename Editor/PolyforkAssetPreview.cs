@@ -209,10 +209,47 @@ namespace Polyfork.EditorTools
 
         public void Clear()
         {
-            if (_target != null)
+            if (_target == null) return;
+
+            ReleaseGeneratedAssets(_target);
+            UnityEngine.Object.DestroyImmediate(_target);
+            _target = null;
+        }
+
+        /// <summary>
+        /// Frees the meshes and materials a preview built for itself.
+        ///
+        /// Destroying a GameObject destroys its components, not the assets they point at, and
+        /// every bake creates a fresh Mesh per part plus a Material. So each rebuild leaked
+        /// both - which at 30-60 ms a bake, with a slider being dragged and no debounce in
+        /// the way, is dozens of leaked objects a second and an editor that gets heavier the
+        /// longer you use it.
+        ///
+        /// IsPersistent is the safety line: anything saved in the project is somebody else's
+        /// and is left alone. What a preview generates at runtime is not persistent, which is
+        /// exactly the set that should go.
+        /// </summary>
+        static void ReleaseGeneratedAssets(GameObject root)
+        {
+            foreach (var filter in root.GetComponentsInChildren<MeshFilter>(true))
             {
-                UnityEngine.Object.DestroyImmediate(_target);
-                _target = null;
+                var mesh = filter.sharedMesh;
+                if (mesh != null && !EditorUtility.IsPersistent(mesh))
+                    UnityEngine.Object.DestroyImmediate(mesh);
+            }
+
+            ReleaseGeneratedMaterials(root);
+        }
+
+        static void ReleaseGeneratedMaterials(GameObject root)
+        {
+            foreach (var renderer in root.GetComponentsInChildren<Renderer>(true))
+            {
+                foreach (var material in renderer.sharedMaterials)
+                {
+                    if (material != null && !EditorUtility.IsPersistent(material))
+                        UnityEngine.Object.DestroyImmediate(material);
+                }
             }
         }
 
@@ -292,14 +329,17 @@ namespace Polyfork.EditorTools
         {
             Clear();
 
+            // Their materials are generated too, and outlive the GameObject the same way.
             if (_ground != null)
             {
+                ReleaseGeneratedMaterials(_ground);
                 UnityEngine.Object.DestroyImmediate(_ground);
                 _ground = null;
             }
 
             if (_contact != null)
             {
+                ReleaseGeneratedMaterials(_contact);
                 UnityEngine.Object.DestroyImmediate(_contact);
                 _contact = null;
             }

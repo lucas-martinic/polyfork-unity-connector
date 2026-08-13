@@ -12,8 +12,8 @@ Shader "Polyfork/Contact Shadow"
 {
     Properties
     {
-        _Color ("Color", Color) = (0.15, 0.14, 0.13, 0.36)
-        _Softness ("Softness", Range(0.01, 1.0)) = 0.55
+        _Color ("Color", Color) = (0, 0, 0, 0.22)
+        _Softness ("Softness", Range(0.01, 1.0)) = 1.0
     }
 
     SubShader
@@ -49,14 +49,16 @@ Shader "Polyfork/Contact Shadow"
             fixed4 frag (v2f i) : SV_Target
             {
                 // Distance from the middle of the quad, 0 at the centre and 1 at the edge.
-                float d = length(i.uv - 0.5) * 2.0;
+                float d = saturate(length(i.uv - 0.5) * 2.0);
 
-                // Dense under the model, gone by the rim. Squared so the core stays solid
-                // instead of fading the moment it leaves the centre.
-                float a = saturate(1.0 - smoothstep(1.0 - _Softness, 1.0, d));
-                a *= a;
+                /* Falls off from the very centre rather than holding a plateau and then
+                 * fading. The plateau version drew a disc with a visible rim - read as "a
+                 * weird circle under the object" rather than as a shadow - and because it was
+                 * warm-tinted, blending it over the cream background turned it orange. Pure
+                 * black now, and never flat. */
+                float a = pow(1.0 - d, 2.4) * _Softness;
 
-                return fixed4(_Color.rgb, _Color.a * a);
+                return fixed4(_Color.rgb, _Color.a * saturate(a));
             }
             ENDCG
         }
