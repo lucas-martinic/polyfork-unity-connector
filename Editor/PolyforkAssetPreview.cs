@@ -12,6 +12,9 @@ namespace Polyfork.EditorTools
     /// </summary>
     public sealed class PolyforkAssetPreview : IDisposable
     {
+        /// <summary>0xeceae6, the store viewer's background.</summary>
+        public static readonly Color Background = new(0.925f, 0.918f, 0.902f, 1f);
+
         PreviewRenderUtility _utility;
         GameObject _target;
         Vector2 _orbit = new(25f, -25f);
@@ -22,18 +25,32 @@ namespace Polyfork.EditorTools
         {
             if (_utility != null) return;
 
+            /* Matched to public/viewer.js on polyfork.dev so an asset looks the same here as
+             * on its store page. Same background, same key and rim, same 38 degree lens.
+             * A model that changes colour and mood between the store and the editor makes
+             * the buyer wonder which one is the asset. */
             _utility = new PreviewRenderUtility();
-            _utility.camera.fieldOfView = 30f;
+            _utility.camera.fieldOfView = 38f;
             _utility.camera.nearClipPlane = 0.01f;
-            _utility.camera.farClipPlane = 100f;
+            _utility.camera.farClipPlane = 200f;
             _utility.camera.clearFlags = CameraClearFlags.SolidColor;
-            _utility.camera.backgroundColor = new Color(0.16f, 0.17f, 0.19f, 1f);
+            _utility.camera.backgroundColor = Background;
 
-            _utility.lights[0].intensity = 1.3f;
-            _utility.lights[0].transform.rotation = Quaternion.Euler(38f, 140f, 0f);
-            _utility.lights[1].intensity = 0.6f;
-            _utility.lights[1].transform.rotation = Quaternion.Euler(-20f, -60f, 0f);
-            _utility.ambientColor = new Color(0.35f, 0.36f, 0.40f);
+            // key: 0xfff2e0 at 2.4, from (4, 7, 5)
+            _utility.lights[0].color = new Color(1f, 0.949f, 0.878f);
+            _utility.lights[0].intensity = 1.5f;
+            _utility.lights[0].transform.rotation = Quaternion.LookRotation(new Vector3(-4f, -7f, -5f));
+            _utility.lights[0].shadows = LightShadows.Soft;
+            _utility.lights[0].shadowStrength = 0.35f;
+
+            // rim: 0xdfe8ff at 0.9, from (-5, 4, -6)
+            _utility.lights[1].color = new Color(0.874f, 0.910f, 1f);
+            _utility.lights[1].intensity = 0.75f;
+            _utility.lights[1].transform.rotation = Quaternion.LookRotation(new Vector3(5f, -4f, 6f));
+            _utility.lights[1].shadows = LightShadows.None;
+
+            // Stands in for the hemisphere light: warm bounce from below, white from above.
+            _utility.ambientColor = new Color(0.72f, 0.70f, 0.66f);
         }
 
         /// <summary>
@@ -80,8 +97,9 @@ namespace Polyfork.EditorTools
 
         public void Draw(Rect rect, bool busy)
         {
-            if (Event.current.type == EventType.Repaint)
-                EditorGUI.DrawRect(rect, new Color(0.16f, 0.17f, 0.19f, 1f));
+            // The same fill the camera clears to, so the panel does not flash a different
+            // colour before the first frame lands.
+            if (Event.current.type == EventType.Repaint) EditorGUI.DrawRect(rect, Background);
 
             HandleInput(rect);
 
@@ -142,10 +160,11 @@ namespace Polyfork.EditorTools
             }
         }
 
+        // Dark text now: the panel is a light background whichever editor skin is in use.
         static GUIStyle CenteredLabel() => new(EditorStyles.miniLabel)
         {
             alignment = TextAnchor.MiddleCenter,
-            normal = { textColor = new Color(0.7f, 0.72f, 0.75f) }
+            normal = { textColor = new Color(0.42f, 0.41f, 0.39f) }
         };
 
         public void Dispose()

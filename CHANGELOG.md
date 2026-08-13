@@ -5,6 +5,26 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-08-13
+
+### Added
+
+- **A remix screen.** Clicking *Remix this asset* gives the model the whole window with its
+  controls beside it, and leaves the catalogue behind rather than squeezed alongside.
+  Browsing and remixing are different jobs: a 340px column shared with a thumbnail grid
+  served neither. The panel beside the grid stays a preview, as it should be.
+
+### Changed
+
+- **The preview matches the store viewer.** Same background (`#eceae6`), same key and rim
+  lights, same 38° lens, taken from `public/viewer.js` on polyfork.dev — with soft shadows.
+  It was a dark studio before, so an asset changed colour and mood between its store page and
+  the editor, which invites the question of which one is the real asset.
+- **Knobs respond immediately when bakes are local.** The 250 ms debounce exists to stop a
+  slider drag becoming forty metered HTTP requests. A local bake is neither metered nor a
+  request, so the wait bought nothing and cost exactly the smoothness the local path was
+  installed for. The server path keeps its debounce.
+
 ## [0.4.1] - 2026-08-13
 
 ### Fixed

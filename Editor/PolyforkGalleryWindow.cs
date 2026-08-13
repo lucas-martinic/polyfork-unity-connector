@@ -75,6 +75,9 @@ namespace Polyfork.EditorTools
 
         readonly PolyforkRemixHistory _history = new();
 
+        /// <summary>True while the remix view has the window to itself.</summary>
+        bool _remixing;
+
         bool _previewDirty;
         double _rebuildAt;
         bool _rebuilding;
@@ -293,6 +296,7 @@ namespace Polyfork.EditorTools
             _selected = asset;
             _schema = null;
             _previewedAssetId = null;      // a new asset should be framed, not inherit zoom
+            _remixing = false;             // a new asset means back to browsing
             _history.Clear();              // undo is per-asset; don't step back into another
             _ranges.Clear();
             _choices.Clear();
@@ -362,7 +366,14 @@ namespace Polyfork.EditorTools
         void QueuePreviewRebuild(bool immediate = false)
         {
             _previewDirty = true;
-            _rebuildAt = EditorApplication.timeSinceStartup + (immediate ? 0d : 0.25d);
+
+            /* The 250 ms wait exists to keep a slider drag from becoming forty metered HTTP
+             * requests. A local bake is neither metered nor a request, so waiting buys
+             * nothing and costs exactly the smoothness the local path was installed for -
+             * the web viewer re-runs the module on every input event and feels continuous
+             * because of it. */
+            var delay = immediate || !MeteredFor(_selected) ? 0d : 0.25d;
+            _rebuildAt = EditorApplication.timeSinceStartup + delay;
         }
 
         /// <summary>
@@ -623,6 +634,17 @@ namespace Polyfork.EditorTools
                         Application.OpenURL(PolyforkKeySettings.AccountUrl);
                 });
 
+            /* Remixing takes the whole window, with the grid left behind rather than
+             * squeezed alongside. Turning knobs is a different job from browsing: it wants
+             * the model big and the controls beside it, which is how the store page reads,
+             * and a 340px column shared with a thumbnail grid gives neither room. */
+            if (_remixing && _selected != null)
+            {
+                DrawRemixScreen();
+                DrawStatusBar();
+                return;
+            }
+
             DrawToolbar();
             DrawRateLimitBanner();
 
@@ -718,6 +740,56 @@ namespace Polyfork.EditorTools
             }
         }
 
+        /// <summary>
+        /// The remix view: the model as large as the window allows, its controls beside it.
+        /// </summary>
+        void DrawRemixScreen()
+        {
+            using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
+            {
+                if (GUILayout.Button("\u2190  Back to catalogue", EditorStyles.toolbarButton, GUILayout.Width(150f)))
+                {
+                    _remixing = false;
+                    GUIUtility.ExitGUI();     // the layout below belongs to a screen that is gone
+                }
+
+                GUILayout.Label($"  {_selected.Title ?? _selected.Id}", EditorStyles.miniBoldLabel);
+                GUILayout.FlexibleSpace();
+
+                GUILayout.Label(
+                    $"{_selected.Triangles} tri  ·  {_selected.Class}  ·  {_selected.AccessLabel()}",
+                    EditorStyles.miniLabel);
+            }
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                // The model gets everything the controls do not need.
+                var knobWidth = Mathf.Clamp(position.width * 0.3f, 300f, 420f);
+
+                using (new EditorGUILayout.VerticalScope())
+                {
+                    var previewRect = GUILayoutUtility.GetRect(
+                        10f, position.width - knobWidth,
+                        10f, position.height,
+                        GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+
+                    _preview.Draw(previewRect, _rebuilding);
+                }
+
+                using (new EditorGUILayout.VerticalScope(GUILayout.Width(knobWidth)))
+                {
+                    _detailScroll = EditorGUILayout.BeginScrollView(_detailScroll);
+                    EditorGUILayout.Space(6f);
+
+                    DrawKnobs();
+                    EditorGUILayout.Space(10f);
+                    DrawImportSection();
+
+                    EditorGUILayout.EndScrollView();
+                }
+            }
+        }
+
         void DrawGrid()
         {
             using var scope = new EditorGUILayout.VerticalScope();
@@ -804,8 +876,23 @@ namespace Polyfork.EditorTools
                 $"{_selected.Triangles} tri - {_selected.Class} - {_selected.AccessLabel()}",
                 EditorStyles.miniLabel);
 
-            var previewRect = GUILayoutUtility.GetRect(DetailWidth - 12f, 200f);
+            var previewRect = GUILayoutUtility.GetRect(DetailWidth - 12f, 220f);
             _preview.Draw(previewRect, _rebuilding);
+
+            EditorGUILayout.Space(6f);
+
+            /* Browsing and remixing are separate jobs, so the panel beside the grid stays a
+             * preview and the knobs get a screen of their own. Only offered when the asset
+             * has something to turn. */
+            using (new EditorGUI.DisabledScope(_schema == null || !_schema.Remixable.Any()))
+            {
+                if (GUILayout.Button("Remix this asset", PolyforkLocalBakingWindow.PrimaryButton,
+                        GUILayout.Height(32f)))
+                {
+                    _remixing = true;
+                    GUIUtility.ExitGUI();
+                }
+            }
 
             EditorGUILayout.Space(4f);
             DrawKnobs();
