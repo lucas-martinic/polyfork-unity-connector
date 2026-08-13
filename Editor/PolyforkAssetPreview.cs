@@ -16,17 +16,16 @@ namespace Polyfork.EditorTools
         /// <summary>0xeceae6, the store viewer's background.</summary>
         public static readonly Color Background = new(0.925f, 0.918f, 0.902f, 1f);
 
-        /// <summary>
-        /// The same colour as the background, so the horizon disappears.
-        ///
-        /// A ground that contrasts with the sky draws a line across the frame and turns a
-        /// product shot into a diorama. Matching them leaves only the shadow to say the model
-        /// is standing on something, which is the whole trick the store viewer uses.
-        /// </summary>
-        static Color GroundColor => Background;
-
         PreviewRenderUtility _utility;
-        GameObject _ground;
+
+        /* No ground plane.
+         *
+         * There was one, lit by the same key and rim as the model, and it could not be made
+         * to match the background: what you see from a lit surface is albedo times lighting,
+         * never a flat colour, so setting its albedo to the sky colour still left a visible
+         * horizon. Unlit and exactly the sky colour, a plane is indistinguishable from no
+         * plane - so this is that, with one fewer object, material and pipeline question.
+         * The contact shadow is what says the model is standing on something. */
         GameObject _contact;
         GameObject _target;
         Vector2 _orbit = new(25f, -25f);
@@ -91,9 +90,8 @@ namespace Polyfork.EditorTools
 
             _bounds = PolyforkSpawner.CalculateBounds(_target);
 
-            EnsureGround();
             EnsureContactShadow();
-            PlaceGround();
+            PlaceContactShadow();
 
             if (frameCamera || !hadTarget) Frame();
         }
@@ -103,47 +101,6 @@ namespace Polyfork.EditorTools
         {
             var size = Mathf.Max(_bounds.size.x, _bounds.size.y, _bounds.size.z);
             _distance = Mathf.Max(0.4f, size * 2.6f);
-        }
-
-        /// <summary>
-        /// The pale ground the model sits on, and what its shadow lands on.
-        ///
-        /// Stock shader on purpose. Receiving a shadow is the one thing that differs hard
-        /// between the built-in pipeline and URP - the sampling is not portable - so the
-        /// plane uses whichever lit shader the project's pipeline already ships, and gets it
-        /// right for free. The model needs our own shader because it needs vertex colours;
-        /// the ground needs neither.
-        /// </summary>
-        void EnsureGround()
-        {
-            if (_ground != null) return;
-
-            _ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
-            _ground.name = "Polyfork Ground";
-            _ground.hideFlags = HideFlags.HideAndDontSave;
-
-            // A collider in a preview scene is dead weight and can be picked up by physics
-            // queries running elsewhere in the editor.
-            var collider = _ground.GetComponent<Collider>();
-            if (collider != null) UnityEngine.Object.DestroyImmediate(collider);
-
-            var urp = GraphicsSettings.currentRenderPipeline != null;
-            var shader = (urp ? Shader.Find("Universal Render Pipeline/Lit") : null)
-                         ?? Shader.Find("Standard")
-                         ?? Shader.Find("Diffuse");
-
-            var material = new Material(shader) { name = "Polyfork Ground", hideFlags = HideFlags.HideAndDontSave };
-            if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", GroundColor);
-            if (material.HasProperty("_Color")) material.SetColor("_Color", GroundColor);
-            if (material.HasProperty("_Glossiness")) material.SetFloat("_Glossiness", 0f);
-            if (material.HasProperty("_Smoothness")) material.SetFloat("_Smoothness", 0f);
-
-            var renderer = _ground.GetComponent<MeshRenderer>();
-            renderer.sharedMaterial = material;
-            renderer.receiveShadows = true;
-            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-
-            _utility.AddSingleGO(_ground);
         }
 
         /// <summary>
@@ -179,21 +136,11 @@ namespace Polyfork.EditorTools
             _utility.AddSingleGO(_contact);
         }
 
-        /// <summary>Sits the ground and its shadow under the model.</summary>
-        void PlaceGround()
+        /// <summary>Sits the shadow under the model.</summary>
+        void PlaceContactShadow()
         {
             var span = Mathf.Max(_bounds.size.x, _bounds.size.z, 0.2f);
             var floor = _bounds.min.y;
-
-            if (_ground != null)
-            {
-                // The primitive plane is 10 units across, hence the tenth.
-                _ground.transform.localScale = Vector3.one * (span * 6f / 10f);
-                _ground.transform.position = new Vector3(
-                    _bounds.center.x,
-                    floor - span * 0.004f,       // just below, so it does not z-fight the model
-                    _bounds.center.z);
-            }
 
             if (_contact != null)
             {
@@ -202,7 +149,7 @@ namespace Polyfork.EditorTools
                 _contact.transform.localScale = Vector3.one * (span * 2.1f);
                 _contact.transform.position = new Vector3(
                     _bounds.center.x - span * 0.06f,
-                    floor - span * 0.002f,       // above the ground, below the model
+                    floor - span * 0.002f,       // just under the model's lowest point
                     _bounds.center.z - span * 0.05f);
             }
         }
@@ -329,14 +276,7 @@ namespace Polyfork.EditorTools
         {
             Clear();
 
-            // Their materials are generated too, and outlive the GameObject the same way.
-            if (_ground != null)
-            {
-                ReleaseGeneratedMaterials(_ground);
-                UnityEngine.Object.DestroyImmediate(_ground);
-                _ground = null;
-            }
-
+            // Its material is generated too, and outlives the GameObject the same way.
             if (_contact != null)
             {
                 ReleaseGeneratedMaterials(_contact);

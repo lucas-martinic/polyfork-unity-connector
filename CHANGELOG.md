@@ -5,6 +5,17 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.5] - 2026-08-13
+
+### Fixed
+
+- **The ground plane could not match the background, so it is gone.** It used a lit shader,
+  and what a lit surface shows is albedo times lighting, never a flat colour — so setting its
+  albedo to the sky colour still left a visible horizon under the key light. Unlit and
+  exactly the sky colour, a plane is indistinguishable from no plane, so that is what this
+  is: same picture, one fewer object, material and pipeline question. The contact shadow is
+  what says the model is standing on something.
+
 ## [0.5.4] - 2026-08-13
 
 ### Fixed
