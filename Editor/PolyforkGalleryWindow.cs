@@ -1142,6 +1142,28 @@ namespace Polyfork.EditorTools
                     GUILayout.Space(10f);
                 }
 
+                /* Where bakes actually happen, and a way to change it. Without this the
+                 * difference between a 120 ms metered round trip and an instant free one is
+                 * invisible, and nothing in the editor ever mentions that the faster path
+                 * exists. */
+                if (_js != null)
+                {
+                    GUILayout.Label(
+                        new GUIContent("local bakes",
+                            $"Geometry is rebuilt here by {PolyforkJsRuntimeProvider.EngineName}: " +
+                            "instant, and it costs no allowance."),
+                        EditorStyles.miniLabel);
+                }
+                else if (GUILayout.Button(
+                             new GUIContent("Make bakes instant",
+                                 "Geometry is currently rebuilt by polyfork.dev: about 120 ms, and " +
+                                 "metered. A local engine makes it instant and free."),
+                             EditorStyles.toolbarButton))
+                {
+                    PolyforkLocalBakingWindow.Open();
+                }
+
+                GUILayout.Space(10f);
                 GUILayout.Label(_status, EditorStyles.miniLabel);
             }
         }

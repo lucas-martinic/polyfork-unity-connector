@@ -5,6 +5,27 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-08-13
+
+### Fixed
+
+- **The instructions for enabling local baking were not followable.** 0.3.0 said "install the
+  PuerTS core and QuickJS packages" without saying from where. They are not in Unity's
+  registry, and the route most people would try — OpenUPM — carries only
+  `com.tencent.puerts.core`, at a version the QuickJS backend does not accept. The obvious
+  path installs cleanly and then never works, with nothing on screen explaining why.
+
+### Added
+
+- **`Polyfork ▸ Make Bakes Instant…`**, a setup window that gives the real steps (both
+  packages from the same GitHub release, added as tarballs), reads the installed versions
+  back from the Package Manager, and calls out a version mismatch explicitly. It flips to a
+  confirmation on its own once an engine registers.
+- **A bake-path indicator in the gallery's status bar.** It reads `local bakes` when an
+  engine is running, and offers *Make bakes instant* when one is not — so the difference
+  between a metered 120 ms round trip and a free instant rebuild is visible rather than
+  something you had to read the README to discover.
+
 ## [0.3.0] - 2026-08-13
 
 ### Added

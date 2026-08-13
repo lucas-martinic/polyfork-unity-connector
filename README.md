@@ -222,15 +222,21 @@ it counts against your hourly allowance. Install a JavaScript engine and the edi
 asset's **own `createAsset()` module** instead — the same program the store runs — so a
 slider costs CPU rather than a request.
 
-```
-Window ▸ Package Manager ▸ add the PuerTS core and QuickJS packages
-```
+**Polyfork ▸ Make Bakes Instant…** walks you through it and reports when it has worked.
+The short version:
 
-That is the whole setup. The gallery picks the local baker up automatically, and every knob
-becomes free and instant: no allowance, no network, no waiting. Nothing else changes, and
-without the engine the connector keeps using the server exactly as before — the assembly
-that binds to PuerTS is gated on the package being present, so it is not a broken state,
-just a slower one.
+1. From one PuerTS release, download **both** `PuerTS_Core_<version>` and
+   `PuerTS_Quickjs_<version>`: <https://github.com/Tencent/puerts/releases>
+2. **Window ▸ Package Manager ▸ + ▸ Add package from tarball…** for each.
+
+> **Take both from the same release.** `com.tencent.puerts.quickjs` depends on an exact
+> `com.tencent.puerts.core` version. OpenUPM carries only the core, at a different version,
+> so the obvious route installs cleanly and then never works. The setup window checks the
+> installed versions and says so if they disagree.
+
+The gallery picks the local baker up automatically. Without the engine the connector keeps
+using the server exactly as before — the assembly that binds to PuerTS is gated on the
+package being present, so its absence is not a broken state, just a slower one.
 
 Two things worth knowing:
 

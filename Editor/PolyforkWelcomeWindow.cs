@@ -256,6 +256,14 @@ namespace Polyfork.EditorTools
                     Application.OpenURL("https://github.com/lucas-martinic/polyfork-unity-connector");
             }
 
+            // Only worth mentioning when it is not already on.
+            if (!PolyforkJsRuntimeProvider.IsAvailable)
+            {
+                EditorGUILayout.Space(2f);
+                if (GUILayout.Button("Make bakes instant and free \u2192", EditorStyles.miniLabel))
+                    PolyforkLocalBakingWindow.Open();
+            }
+
             EditorGUILayout.Space(4f);
             EditorGUILayout.LabelField(
                 "Polyfork ▸ Welcome brings this back.", EditorStyles.centeredGreyMiniLabel);
