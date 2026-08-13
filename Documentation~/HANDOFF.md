@@ -14,6 +14,7 @@ store inside the Unity editor.
 | --- | --- |
 | Repo | `github.com/lucas-martinic/polyfork-unity-connector` — **public** |
 | The package | The repo root. This repo is the package, nothing else |
+| This document | `Documentation~/HANDOFF.md`. The `~` keeps Unity from importing it |
 | Install URL | `https://github.com/lucas-martinic/polyfork-unity-connector.git` |
 | On the VPS | `/root/apps/polyfork-unity-connector` |
 
@@ -153,6 +154,15 @@ the Polyfork mark. See `CHANGELOG.md`.
   with the magenta error shader — which also has no single-pass-instanced stereo support,
   so they look pink *and* monoscopic. Consumers shipping a build must add them to Always
   Included Shaders. Worth a line in the README's troubleshooting.
+- **Every asset needs a `.meta`, and the package cannot fix it itself.** Unity writes
+  missing `.meta` files for assets it owns, but a package installed from a git URL is
+  *immutable*, so it cannot: it prints `has no meta file, but it's in an immutable folder.
+  The asset will be ignored` and skips it. On a script or an asmdef that is a silent
+  removal from the compilation, not a build error. The mirror image is an orphaned `.meta`
+  outliving whatever it described. Both shipped in 0.2.0. `Tools~/check-package.py` now
+  fails CI on either; run it before pushing. Anything under a `~`-suffixed or `.`-prefixed
+  path is exempt, because Unity ignores those too - which is why docs and tooling live in
+  `Documentation~/` and `Tools~/`.
 - **Test assemblies and `defineConstraints`.** `UNITY_INCLUDES_TESTS` silently skips the
   assembly; the tests just never run and nothing reports it.
 - **A package's tests need `testables`** in the host project's manifest, or they silently

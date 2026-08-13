@@ -1,0 +1,47 @@
+name: package
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  meta:
+    # Catches the class of bug that shipped in 0.2.0: a .meta file missing or orphaned.
+    # Unity cannot repair either one inside an immutable package, so it silently ignores
+    # the asset instead, and nobody finds out until someone imports the package.
+    name: meta files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 "Tools~/check-package.py"
+
+  manifest:
+    name: package.json
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate and check the sample paths resolve
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+
+          with open("package.json") as f:
+              pkg = json.load(f)
+
+          problems = []
+          for field in ("name", "version", "unity", "displayName", "description", "license"):
+              if not pkg.get(field):
+                  problems.append(f"package.json is missing {field}")
+
+          # A sample whose path does not exist shows up in the Package Manager and then
+          # imports nothing, with no error.
+          for sample in pkg.get("samples", []):
+              path = sample.get("path", "")
+              if not os.path.isdir(path):
+                  problems.append(f"sample {sample.get('displayName')!r} -> {path} does not exist")
+
+          for p in problems:
+              print(f"::error::{p}")
+          sys.exit(1 if problems else 0)
+          PY

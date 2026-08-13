@@ -5,6 +5,28 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-08-13
+
+### Fixed
+
+- **Two assets were being ignored on import.** Unity cannot write a missing `.meta` inside
+  an immutable package, so it skips the asset and says so:
+  `… has no meta file, but it's in an immutable folder. The asset will be ignored.`
+  - `Runtime/Resources/` held nothing but `Polyfork.meta`, an orphan left behind when local
+    baking moved to `Samples~/LocalBaking`. The folder it described was already gone. Both
+    are now removed; the JS payload lives in the sample, which is where it belongs, and
+    `PolyforkJsRuntimeProvider` already falls back to server baking when it is absent.
+  - `HANDOFF.md` moved to `Documentation~/`. It is a maintainer document and has no business
+    being imported into a consumer's project as a `TextAsset`; the trailing `~` is how Unity
+    is told to leave a folder alone.
+
+### Added
+
+- **A CI check for exactly this** (`Tools~/check-package.py`, run by
+  `.github/workflows/package-check.yml`). It walks the package the way Unity does, skipping
+  dot- and tilde-paths, and fails on any missing or orphaned `.meta`, plus a `package.json`
+  whose declared sample paths do not resolve. No Unity licence needed.
+
 ## [0.2.0] - 2026-08-13
 
 Re-verified against the live API. The endpoint had gained the ability to bake structural
