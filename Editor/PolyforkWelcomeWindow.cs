@@ -58,7 +58,8 @@ namespace Polyfork.EditorTools
 
             // Fixed size: the content does not reflow, and a utility window that remembers a
             // stretched size from last time leaves a lake of grey under the buttons.
-            var size = new Vector2(470f, 340f);
+            // Tall enough for the setup CTA, which only appears when no engine is installed.
+            var size = new Vector2(470f, PolyforkJsRuntimeProvider.IsAvailable ? 340f : 392f);
             window.minSize = size;
             window.maxSize = size;
             window.ShowUtility();
@@ -264,12 +265,21 @@ namespace Polyfork.EditorTools
                     Application.OpenURL("https://github.com/lucas-martinic/polyfork-unity-connector");
             }
 
-            // Only worth mentioning when it is not already on.
+            /* Only worth offering when it is not already on. Drawn as a real button rather
+             * than the label-styled one it was: styled as a miniLabel it rendered as grey
+             * text in a corner, which reads as a footnote and was reported as missing. */
             if (!PolyforkJsRuntimeProvider.IsAvailable)
             {
-                EditorGUILayout.Space(2f);
-                if (GUILayout.Button("Set up instant bakes \u2192", EditorStyles.miniLabel))
-                    PolyforkLocalBakingWindow.Open();
+                EditorGUILayout.Space(8f);
+                if (GUILayout.Button(
+                        new GUIContent("Set up instant bakes",
+                            "Knob changes are rebuilt by polyfork.dev today: about 120 ms each, and " +
+                            "metered. A local engine makes them instant and free."),
+                        PolyforkLocalBakingWindow.PrimaryButton,
+                        GUILayout.Height(34f)))
+                {
+                    SwapFor(PolyforkLocalBakingWindow.Open);
+                }
             }
 
             EditorGUILayout.Space(4f);

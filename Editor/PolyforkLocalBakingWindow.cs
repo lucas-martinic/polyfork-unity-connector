@@ -41,11 +41,36 @@ namespace Polyfork.EditorTools
         Vector2 _scroll;
 
         /// <summary>
-        /// Whether an engine actually registered itself. This is the only honest signal:
-        /// the binding assembly compiles only when QuickJS is present, so if the factory is
-        /// set, everything downstream of it works.
+        /// Whether an engine actually registered itself. The binding assembly compiles only
+        /// when QuickJS is present, so a factory being set means everything downstream works.
         /// </summary>
         static bool EngineReady => PolyforkJsRuntimeProvider.IsAvailable;
+
+        /// <summary>
+        /// Whether the project has ASKED for the packages, read from the manifest.
+        ///
+        /// Adding a package triggers a domain reload, which wipes every field on this window,
+        /// so anything remembered in one cannot survive its own success. That is why the
+        /// first version offered to install again after installing: it had forgotten. The
+        /// manifest is the one thing that outlives the reload.
+        /// </summary>
+        static bool PackagesRequested()
+        {
+            try
+            {
+                var manifest = Path.Combine(
+                    Path.GetDirectoryName(Application.dataPath) ?? ".", "Packages", "manifest.json");
+
+                if (!File.Exists(manifest)) return false;
+
+                var text = File.ReadAllText(manifest);
+                return text.Contains(CorePackage) && text.Contains(QuickJsPackage);
+            }
+            catch (Exception)
+            {
+                return false;   // unreadable manifest is not a reason to hide the button
+            }
+        }
 
         void OnGUI()
         {
@@ -59,6 +84,7 @@ namespace Polyfork.EditorTools
                        new GUIStyle { padding = new RectOffset(16, 16, 12, 12) }))
             {
                 if (EngineReady) DrawReady();
+                else if (PackagesRequested()) DrawInstalledButNotRunning();
                 else DrawSetup();
             }
 
@@ -89,6 +115,46 @@ namespace Polyfork.EditorTools
             }
         }
 
+        /// <summary>
+        /// Installed, but no engine yet. Almost always "Unity has not finished compiling",
+        /// which is a wait rather than a problem - but it needs saying, because the previous
+        /// version showed the install button again here and left you with no way to tell a
+        /// finished install from one that never started.
+        /// </summary>
+        void DrawInstalledButNotRunning()
+        {
+            EditorGUILayout.LabelField(
+                SessionState.GetBool(InstallRequestedKey, false)
+                    ? "PuerTS installed"
+                    : "PuerTS is installed",
+                EditorStyles.boldLabel);
+            EditorGUILayout.Space(4f);
+
+            EditorGUILayout.LabelField(
+                "Both packages are in this project, so there is nothing more to install. " +
+                "Local baking switches on as soon as Unity finishes compiling them.",
+                EditorStyles.wordWrappedLabel);
+
+            EditorGUILayout.Space(8f);
+            DrawDetected();
+
+            EditorGUILayout.Space(10f);
+            EditorGUILayout.LabelField(
+                "Still not running after the spinner stops? Check the Console for errors from " +
+                "PuerTS — that is where a platform-specific native plugin failure shows up.",
+                EditorStyles.wordWrappedMiniLabel);
+
+            EditorGUILayout.Space(8f);
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                if (GUILayout.Button("Open Package Manager", EditorStyles.miniButton))
+                    EditorApplication.ExecuteMenuItem("Window/Package Manager");
+
+                if (GUILayout.Button("Recompile", EditorStyles.miniButton))
+                    AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
+            }
+        }
+
         void DrawSetup()
         {
             EditorGUILayout.LabelField(
@@ -106,32 +172,25 @@ namespace Polyfork.EditorTools
             EditorGUILayout.Space(12f);
             EditorGUILayout.LabelField("Installing PuerTS", EditorStyles.boldLabel);
 
-            /* The version trap, stated first because it is the one that wastes an afternoon.
-             * The QuickJS package pins the core to its exact version, and OpenUPM carries
-             * only the core - at a different version - so the obvious route half-works. */
-            EditorGUILayout.HelpBox(
-                "Take both packages from the SAME release. The QuickJS backend depends on an " +
-                "exact core version, and OpenUPM carries only the core, at a version that does " +
-                "not match. Mixing them installs cleanly and then never works.",
-                MessageType.Warning);
-
-            EditorGUILayout.Space(6f);
+            EditorGUILayout.Space(10f);
 
             using (new EditorGUI.DisabledScope(_installing))
             {
-                if (GUILayout.Button(
-                        _installing ? "Installing…" : "Install PuerTS for me",
-                        GUILayout.Height(32f)))
-                {
+                var label = _installing ? "Installing…" : "Install PuerTS  ·  14 MB, about a minute";
+                if (GUILayout.Button(label, PrimaryButton, GUILayout.Height(44f)))
                     _ = InstallAsync();
-                }
             }
 
             if (_installStatus != null)
                 EditorGUILayout.LabelField(_installStatus, EditorStyles.wordWrappedMiniLabel);
 
-            EditorGUILayout.Space(8f);
+            EditorGUILayout.Space(10f);
             EditorGUILayout.LabelField("Or do it by hand", EditorStyles.miniBoldLabel);
+            EditorGUILayout.LabelField(
+                "Take both from the same release. The QuickJS backend pins an exact core version, " +
+                "and OpenUPM carries only the core, at a version that does not match.",
+                EditorStyles.wordWrappedMiniLabel);
+            EditorGUILayout.Space(4f);
             Step(1, "Download PuerTS_Core_<version> and PuerTS_Quickjs_<version> from the releases page.");
             Step(2, "Window ▸ Package Manager ▸ + ▸ Add package from tarball…, and add each one.");
             Step(3, "Come back here — this window turns green on its own once the engine registers.");
@@ -157,6 +216,25 @@ namespace Polyfork.EditorTools
                 "Prefer not to? Nothing breaks. The server keeps baking, and topology-preserving " +
                 "sliders are already smoothed by interpolation.",
                 EditorStyles.wordWrappedMiniLabel);
+        }
+
+        /// <summary>The one action worth clicking, sized and coloured to say so.</summary>
+        internal static GUIStyle PrimaryButton
+        {
+            get
+            {
+                var style = new GUIStyle(GUI.skin.button)
+                {
+                    fontSize = 13,
+                    fontStyle = FontStyle.Bold,
+                    alignment = TextAnchor.MiddleCenter
+                };
+                style.normal.textColor = PolyforkBrand.Accent;
+                style.hover.textColor = PolyforkBrand.Accent;
+                style.focused.textColor = PolyforkBrand.Accent;
+                style.active.textColor = PolyforkBrand.Accent;
+                return style;
+            }
         }
 
         static void Step(int n, string text)
@@ -192,13 +270,6 @@ namespace Polyfork.EditorTools
                     $"Versions differ ({core} and {quickjs}). Install both from the same release.",
                     MessageType.Error);
             }
-            else if (core != null && quickjs != null && !EngineReady)
-            {
-                EditorGUILayout.HelpBox(
-                    "Both packages are present but no engine has registered. Unity may still be " +
-                    "compiling; if this persists, check the Console for errors from PuerTS.",
-                    MessageType.Warning);
-            }
         }
 
         /// <summary>Installed version of a package, or null. Never throws: this is decoration.</summary>
@@ -218,6 +289,8 @@ namespace Polyfork.EditorTools
         // =====================================================================
         // One-button install
         // =====================================================================
+
+        const string InstallRequestedKey = "Polyfork.PuertsInstallRequested";
 
         bool _installing;
         string _installStatus;
@@ -286,6 +359,11 @@ namespace Polyfork.EditorTools
                 Repaint();
 
                 // Relative to the Packages folder, which is how Unity resolves a file: path.
+                /* Adding a package reloads the domain, which kills this window's fields and
+                 * this callback with them. The flag is what lets the window come back knowing
+                 * an install was in flight rather than starting from scratch. */
+                SessionState.SetBool(InstallRequestedKey, true);
+
                 _addRequest = Client.AddAndRemove(new[]
                 {
                     $"file:PuerTS/{core.name}",

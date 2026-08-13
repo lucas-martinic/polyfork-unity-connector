@@ -5,6 +5,28 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.4] - 2026-08-13
+
+### Fixed
+
+- **The setup window offered to install PuerTS again after installing it.** Adding a package
+  triggers a domain reload, which wipes every field on an `EditorWindow` — so the window
+  could not survive its own success, and reset to its opening state with no way to tell a
+  finished install from one that never started. It now reads the project's
+  `Packages/manifest.json` instead of remembering, and has a third state: *installed, waiting
+  for Unity to finish compiling*, with the Console pointed at as the place a native-plugin
+  failure would show.
+- **The setup link on the welcome screen was styled as a `miniLabel`**, so it rendered as
+  grey text in a corner and read as a footnote. It is a proper button now, and the window is
+  taller when it is shown.
+
+### Changed
+
+- `Install PuerTS for me` is now a single large primary action stating the download size, and
+  the yellow warning above it is gone: with both tarballs taken from one release the version
+  mismatch it warned about cannot happen. The caveat survives as plain text under the manual
+  steps, which is the only path it still applies to.
+
 ## [0.3.3] - 2026-08-13
 
 ### Fixed
