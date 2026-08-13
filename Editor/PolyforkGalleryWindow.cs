@@ -85,6 +85,23 @@ namespace Polyfork.EditorTools
         readonly PolyforkRemixBudget _budget = new();
 
         bool IsRateLimited => EditorApplication.timeSinceStartup < _rateLimitedUntil || _budget.IsExhausted;
+
+        /// <summary>
+        /// Whether the baker that would actually serve this asset spends allowance.
+        ///
+        /// A local bake costs nothing, so an exhausted server allowance must not disable a
+        /// control it has no bearing on. Gating on the allowance alone meant that running out
+        /// of remote bakes froze the whole window - no preview, no knobs - on a machine that
+        /// could rebuild every free asset locally and instantly.
+        /// </summary>
+        bool MeteredFor(PolyforkAsset asset)
+        {
+            if (asset == null) return true;
+            return (_bakers.Resolve(asset, _schema)?.ConsumesAllowance) ?? true;
+        }
+
+        /// <summary>Rate limiting only blocks work that would actually leave the machine.</summary>
+        bool BlockedByAllowance => IsRateLimited && MeteredFor(_selected);
         string _importMessage;
         MessageType _importMessageType = MessageType.Info;
         string _importFolder = PolyforkAssetImporter.DefaultFolder;
@@ -193,7 +210,7 @@ namespace Polyfork.EditorTools
         {
             // Geometry rebuilds need the network, so hold them while capped rather than
             // firing requests that can only fail. Colour edits are local and unaffected.
-            if (_previewDirty && !_rebuilding && !IsRateLimited &&
+            if (_previewDirty && !_rebuilding && !BlockedByAllowance &&
                 EditorApplication.timeSinceStartup >= _rebuildAt)
             {
                 _previewDirty = false;
@@ -432,10 +449,27 @@ namespace Polyfork.EditorTools
                 var baker = _bakers.Resolve(asset, _schema) ?? _bakers.Bakers.FirstOrDefault();
                 if (baker == null) return;
 
+                var request = new PolyforkBakeRequest(asset, _schema, payload);
                 var meters = baker.ConsumesAllowance && payload.Count > 0;
 
-                var go = await baker.BakeAsync(
-                    new PolyforkBakeRequest(asset, _schema, payload), _cts.Token);
+                var go = await baker.BakeAsync(request, _cts.Token);
+
+                /* A baker returning null is a failure it chose not to throw for - a module
+                 * that would not fetch, a bake that produced nothing. Falling straight through
+                 * to an empty preview would read as a broken asset, so the server gets a turn
+                 * before giving up: slower and metered, but it is the path that always works. */
+                if (go == null && baker != _bakers.Bakers.LastOrDefault(b => b.ConsumesAllowance))
+                {
+                    var fallback = _bakers.Bakers.LastOrDefault(b => b.ConsumesAllowance && b.IsAvailable);
+                    if (fallback != null && !IsRateLimited)
+                    {
+                        Debug.LogWarning(
+                            $"[Polyfork] {baker.Name} produced nothing for {asset.Id}; rebuilding on {fallback.Name}.");
+
+                        meters = fallback.ConsumesAllowance && payload.Count > 0;
+                        go = await fallback.BakeAsync(request, _cts.Token);
+                    }
+                }
 
                 if (_selected != asset)
                 {
@@ -443,7 +477,11 @@ namespace Polyfork.EditorTools
                     return;
                 }
 
-                if (go == null) return;
+                if (go == null)
+                {
+                    Debug.LogWarning($"[Polyfork] no baker could build {asset.Id}.");
+                    return;
+                }
 
                 // Re-read the real figure rather than trusting the local mirror; the variant
                 // may have been baked by someone else already and cost nothing.
@@ -599,6 +637,11 @@ namespace Polyfork.EditorTools
 
         void DrawRateLimitBanner()
         {
+            /* Nothing to warn about while a local engine is running: bakes are free, and a
+             * standing banner about an allowance that cannot bite is just noise. Paid assets
+             * still go to the server, but those cannot be imported without a licence anyway. */
+            if (_js != null) return;
+
             if (IsRateLimited)
             {
                 var seconds = _rateLimitedUntil - EditorApplication.timeSinceStartup;
@@ -973,11 +1016,12 @@ namespace Polyfork.EditorTools
             _choices.TryGetValue(knob.Name, out var current);
             var index = Mathf.Max(0, knob.Options.ToList().IndexOf(current ?? knob.DefaultString));
 
-            using var disabled = new EditorGUI.DisabledScope(IsRateLimited);
+            using var disabled = new EditorGUI.DisabledScope(BlockedByAllowance);
 
             var label = new GUIContent(
                 knob.Label,
-                IsRateLimited ? "Rate limited - add an API key to keep remixing geometry." : knob.Describe);
+                BlockedByAllowance ? "Out of server bakes - add an API key, or install a local engine "
+                    + "from Polyfork \u25b8 Setup to bake for free." : knob.Describe);
 
             EditorGUI.BeginChangeCheck();
             var next = EditorGUILayout.Popup(label, index, knob.Options.Select(o => new GUIContent(o)).ToArray());
@@ -993,11 +1037,12 @@ namespace Polyfork.EditorTools
         {
             if (!_toggles.TryGetValue(knob.Name, out var current)) current = knob.DefaultBool;
 
-            using var disabled = new EditorGUI.DisabledScope(IsRateLimited);
+            using var disabled = new EditorGUI.DisabledScope(BlockedByAllowance);
 
             var label = new GUIContent(
                 knob.Label,
-                IsRateLimited ? "Rate limited - add an API key to keep remixing geometry." : knob.Describe);
+                BlockedByAllowance ? "Out of server bakes - add an API key, or install a local engine "
+                    + "from Polyfork \u25b8 Setup to bake for free." : knob.Describe);
 
             EditorGUI.BeginChangeCheck();
             var next = EditorGUILayout.Toggle(label, current);
@@ -1014,11 +1059,12 @@ namespace Polyfork.EditorTools
 
             // Geometry is rebuilt server-side, so these are the only controls a rate limit
             // actually blocks. Grey them out rather than letting drags silently do nothing.
-            using var disabled = new EditorGUI.DisabledScope(IsRateLimited);
+            using var disabled = new EditorGUI.DisabledScope(BlockedByAllowance);
 
             var label = new GUIContent(
                 knob.Label,
-                IsRateLimited ? "Rate limited - add an API key to keep remixing geometry." : knob.Describe);
+                BlockedByAllowance ? "Out of server bakes - add an API key, or install a local engine "
+                    + "from Polyfork \u25b8 Setup to bake for free." : knob.Describe);
 
             EditorGUI.BeginChangeCheck();
             float next;
@@ -1131,7 +1177,7 @@ namespace Polyfork.EditorTools
                 GUILayout.Label(_loading ? "Loading..." : $"{_filtered.Count} of {_all.Count} shown", EditorStyles.miniLabel);
                 GUILayout.FlexibleSpace();
 
-                if (_budget.Synced)
+                if (_budget.Synced && _js == null)
                 {
                     var style = new GUIStyle(EditorStyles.miniLabel);
                     if (_budget.IsLow) style.normal.textColor = new Color(0.95f, 0.72f, 0.35f);
@@ -1148,11 +1194,15 @@ namespace Polyfork.EditorTools
                  * exists. */
                 if (_js != null)
                 {
+                    var style = new GUIStyle(EditorStyles.miniLabel);
+                    style.normal.textColor = PolyforkBrand.Accent;
                     GUILayout.Label(
-                        new GUIContent("local bakes",
+                        new GUIContent($"local bakes - unmetered",
                             $"Geometry is rebuilt here by {PolyforkJsRuntimeProvider.EngineName}: " +
-                            "instant, and it costs no allowance."),
-                        EditorStyles.miniLabel);
+                            "instant, and it spends no allowance. The server allowance only " +
+                            "applies to assets whose module this connection cannot fetch."),
+                        style);
+                    GUILayout.Space(10f);
                 }
                 else if (GUILayout.Button(
                              new GUIContent("Setup",

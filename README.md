@@ -238,7 +238,9 @@ By hand instead:
 > so the obvious route installs cleanly and then never works. The setup window checks the
 > installed versions and says so if they disagree.
 
-The gallery picks the local baker up automatically. Without the engine the connector keeps
+The gallery picks the local baker up automatically, and stops reporting a remaining-bakes
+count once it has: with a local engine the allowance only governs assets whose module this
+connection cannot fetch, which are the ones you could not import anyway. Without the engine the connector keeps
 using the server exactly as before — the assembly that binds to PuerTS is gated on the
 package being present, so its absence is not a broken state, just a slower one.
 

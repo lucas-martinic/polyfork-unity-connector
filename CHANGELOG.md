@@ -5,6 +5,26 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-08-13
+
+### Fixed
+
+- **An exhausted server allowance froze a window that did not need the server.** The preview
+  rebuild was gated on `!IsRateLimited`, and the knobs were disabled by the same flag — so
+  running out of remote bakes stopped the gallery showing anything or letting you touch a
+  control, on a machine that could rebuild every free asset locally and instantly.
+
+  Gating now asks what would actually happen to *this* asset: the resolved baker's
+  `ConsumesAllowance`. A local bake spends nothing, so nothing is blocked.
+- **The allowance is no longer reported when it does not govern.** With a local engine
+  running, the status bar reads `local bakes - unmetered` instead of a remaining-bakes count,
+  and the rate-limit banner does not appear at all. The number was true and irrelevant, which
+  is worse than absent: it read as the reason the window was stuck.
+- **A baker that produced nothing left an empty preview.** If the local baker cannot fetch an
+  asset's module, or its bake yields no mesh, the server now gets a turn before giving up —
+  slower and metered, but it always works. Both the fallback and a total failure are logged
+  rather than silently showing nothing.
+
 ## [0.3.6] - 2026-08-13
 
 ### Fixed
