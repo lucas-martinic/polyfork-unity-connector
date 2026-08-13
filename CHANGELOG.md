@@ -5,6 +5,34 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-08-13
+
+### Added
+
+- **Instant, unmetered bakes in the editor.** The gallery now goes through
+  `PolyforkBakerRegistry` instead of calling the remix endpoint directly, which it had never
+  done — local baking existed but only ever affected the runtime component, so every editor
+  preview was a ~120 ms round trip against your allowance. With a JS engine installed the
+  editor runs the asset's own `createAsset()` module: no request, no quota, no wait.
+
+  Setup is installing the PuerTS core and QuickJS packages. Nothing else. Without them the
+  binding assembly is not compiled at all and the server path runs exactly as before.
+
+### Changed
+
+- **Local baking moved out of `Samples~` and into the package, editor-only.** The engine
+  binding declares `includePlatforms: ["Editor"]` and the ~336 KB three.js bundle now lives
+  under `Editor/JS/`, so neither can reach a player build. A shipped game always uses the
+  server baker.
+
+  The bundle previously sat in a `Resources` folder, and Unity copies `Resources` into every
+  player build whether anything references it or not — that payload was the whole reason
+  local baking had been kept at arm's length as an opt-in sample. Editor-only removes the
+  reason rather than working around it, so the *Local Baking* sample is gone; it is a
+  feature now.
+- `PolyforkJsRuntimeProvider` takes its scripts from a `ScriptSource` hook, set by the editor
+  assembly, falling back to the old `Resources` path so an existing project keeps working.
+
 ## [0.2.3] - 2026-08-13
 
 ### Fixed

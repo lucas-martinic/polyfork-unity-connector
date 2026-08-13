@@ -1,8 +1,5 @@
 #if POLYFORK_PUERTS
-using UnityEngine;
-#if UNITY_EDITOR
 using UnityEditor;
-#endif
 
 namespace Polyfork
 {
@@ -16,13 +13,13 @@ namespace Polyfork
     /// </summary>
     public static class PolyforkPuertsBootstrap
     {
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-        static void RegisterAtRuntime() => Register();
-
-#if UNITY_EDITOR
+        /* Editor-only: this assembly declares includePlatforms: ["Editor"], so there is no
+         * player build for a RuntimeInitializeOnLoadMethod to run in. Local baking is an
+         * editor convenience - instant sliders while you are dressing a scene - and a shipped
+         * game keeps using the server baker, which is what stops the JS engine and its
+         * bundle from ever reaching a player. */
         [InitializeOnLoadMethod]
         static void RegisterInEditor() => Register();
-#endif
 
         static void Register()
         {

@@ -215,6 +215,46 @@ for the full trade-off.
   Don't rescale to fake a fit; pick a right-sized asset.
 - Requires **Linear** colour space so vertex-colour maths matches the authored hexes.
 
+## Instant bakes in the editor
+
+By default a knob change is a round trip: the server rebuilds the mesh in about 120 ms and
+it counts against your hourly allowance. Install a JavaScript engine and the editor runs the
+asset's **own `createAsset()` module** instead — the same program the store runs — so a
+slider costs CPU rather than a request.
+
+```
+Window ▸ Package Manager ▸ add the PuerTS core and QuickJS packages
+```
+
+That is the whole setup. The gallery picks the local baker up automatically, and every knob
+becomes free and instant: no allowance, no network, no waiting. Nothing else changes, and
+without the engine the connector keeps using the server exactly as before — the assembly
+that binds to PuerTS is gated on the package being present, so it is not a broken state,
+just a slower one.
+
+Two things worth knowing:
+
+**It is editor-only, by construction.** The engine binding declares
+`includePlatforms: ["Editor"]` and the ~336 KB three.js bundle lives under `Editor/`, so
+neither can reach a player build. A shipped game always uses the server baker. This is the
+reason local baking used to be an opt-in sample: the scripts sat in a `Resources` folder,
+and Unity copies `Resources` into every build whether anything references it or not.
+
+**It only covers assets whose module you can fetch** — every free asset, and paid ones once
+you own them. Locked assets still preview from their public GLB and still remix on the
+server.
+
+For responsive sliders with no engine at all, there is a middle option: the runtime measures
+whether a range knob is topology-preserving and, when it is, interpolates between two bakes
+at about 0.05 ms. 14 of 32 range knobs qualified on the live catalogue.
+
+```csharp
+await remixable.MeasureMorphableKnobsAsync();
+if (remixable.IsMorphable("width")) {
+    // SetRange now interpolates locally instead of calling out
+}
+```
+
 ## Exporting to FBX
 
 There is no FBX button here on purpose. Assets import as `.glb`, which glTFast turns into a
@@ -242,7 +282,6 @@ Import from the package page in **Window ▸ Package Manager**.
 | Sample | What it does |
 | --- | --- |
 | **Runtime API** | Spawns an asset at play time and drives a knob from script |
-| **Local Baking** | Offline geometry rebuilds via PuerTS/QuickJS. Optional — read its README first |
 
 ## Licence
 

@@ -92,11 +92,29 @@ namespace Polyfork.EditorTools
         Vector2 _gridScroll;
         Vector2 _detailScroll;
 
+        /// <summary>
+        /// Who rebuilds geometry. A local baker outranks the server one whenever a JS engine
+        /// is installed, which is what makes a slider drag instant and free.
+        /// </summary>
+        readonly PolyforkBakerRegistry _bakers = new();
+
+        /// <summary>The JS engine, if one is installed. Owned by this window.</summary>
+        IPolyforkJsRuntime _js;
+
         void OnEnable()
         {
             _cts = new CancellationTokenSource();
             _client = new PolyforkClient { ApiKey = PolyforkCredentials.Resolve(null) };
             _loader = new PolyforkGlbLoader(_client);
+
+            _bakers.Register(new PolyforkServerBaker(_client, _loader, _budget));
+
+            /* Starting QuickJS means evaluating a 336 KB three.js bundle, so it happens once
+             * per window rather than per bake. Returns null when no engine is installed, and
+             * the registry then has only the server baker - which is exactly the old
+             * behaviour, not a broken one. */
+            _js = PolyforkJsRuntimeProvider.TryCreate();
+            if (_js != null) _bakers.Register(new PolyforkLocalBaker(_js, _client));
             _thumbs = new PolyforkThumbnailCache(_client);
             _thumbs.Changed += Repaint;
             _preview = new PolyforkAssetPreview();
@@ -137,6 +155,11 @@ namespace Polyfork.EditorTools
             _cts?.Dispose();
             _thumbs?.Dispose();
             _preview?.Dispose();
+
+            // The JS engine holds a native QuickJS context. Leaking one per window open would
+            // accumulate quietly across a session until the editor started misbehaving.
+            _js?.Dispose();
+            _js = null;
         }
 
         /// <summary>A newly saved key clears the limit and re-arms the client immediately.</summary>
@@ -361,6 +384,36 @@ namespace Polyfork.EditorTools
             return values;
         }
 
+        /// <summary>
+        /// Geometry plus colour, which is what a baker wants.
+        ///
+        /// The two paths use it differently and both are correct: the server baker filters
+        /// out everything it cannot bake and re-applies colour to the returned mesh, while a
+        /// local baker runs the asset's own module and honours the whole set outright.
+        /// </summary>
+        PolyforkKnobValues BuildAllValues()
+        {
+            var values = BuildGeometryValues();
+            if (_schema == null) return values;
+
+            foreach (var kv in _slotColors)
+            {
+                if (!_schema.Knobs.TryGetValue(kv.Key, out var knob)) continue;
+                if (knob.Type != PolyforkKnobType.Color) continue;
+
+                // Only what the user actually moved: an authored default is already in the
+                // mesh, and sending it would make an unchanged asset look like a variant.
+                if (PolyforkParams.TryParseHex(knob.DefaultString, out var authored) &&
+                    Mathf.Approximately(authored.r, kv.Value.r) &&
+                    Mathf.Approximately(authored.g, kv.Value.g) &&
+                    Mathf.Approximately(authored.b, kv.Value.b)) continue;
+
+                values.SetColor(kv.Key, kv.Value);
+            }
+
+            return values;
+        }
+
         async Task RebuildPreviewAsync()
         {
             if (_selected == null) return;
@@ -370,29 +423,31 @@ namespace Polyfork.EditorTools
 
             try
             {
-                var payload = BuildGeometryValues();
+                var payload = BuildAllValues();
 
-                var url = payload.Count == 0 ? asset.PreviewGlb : _client.RemixGlbUrl(asset.Id, payload);
-                if (string.IsNullOrEmpty(url)) return;
+                /* Whichever baker can serve this asset. With a JS engine installed that is
+                 * the local one: it runs the asset's own module, honours every knob, costs
+                 * no allowance and returns in about the time a frame takes. Without one it
+                 * is the server, exactly as before. */
+                var baker = _bakers.Resolve(asset, _schema) ?? _bakers.Bakers.FirstOrDefault();
+                if (baker == null) return;
 
-                // Only a request that actually leaves the machine can cost a bake, and only
-                // a variant nobody has baked before is metered at all.
-                var billable = payload.Count > 0 && !_loader.IsCached(url);
-                if (billable) _budget.TryConsume();
+                var meters = baker.ConsumesAllowance && payload.Count > 0;
 
-                var bytes = await _loader.GetBytesAsync(url, _cts.Token);
-                if (_selected != asset) return;
+                var go = await baker.BakeAsync(
+                    new PolyforkBakeRequest(asset, _schema, payload), _cts.Token);
+
+                if (_selected != asset)
+                {
+                    if (go != null) DestroyImmediate(go);
+                    return;
+                }
+
+                if (go == null) return;
 
                 // Re-read the real figure rather than trusting the local mirror; the variant
                 // may have been baked by someone else already and cost nothing.
-                if (billable) _ = RefreshAccessAsync();
-
-                var go = await _loader.InstantiateAsync(bytes, url, null, _cts.Token);
-                if (_selected != asset)
-                {
-                    DestroyImmediate(go);
-                    return;
-                }
+                if (meters) _ = RefreshAccessAsync();
 
                 // Colours are applied locally: the remix endpoint does not bake them.
                 // Keep the binding so later colour edits skip the network entirely.
@@ -411,6 +466,12 @@ namespace Polyfork.EditorTools
             catch (PolyforkRateLimitException e)
             {
                 HandleRateLimit(e);
+            }
+            catch (PolyforkBakeUnavailableException e)
+            {
+                // Out of allowance. Keep the mesh that is already on screen rather than
+                // blanking the preview, and let the banner explain why it stopped moving.
+                Debug.LogWarning($"[Polyfork] {e.Message}");
             }
             catch (Exception e)
             {

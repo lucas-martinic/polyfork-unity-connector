@@ -6,7 +6,9 @@
         "com.tencent.puerts.core",
         "com.tencent.puerts.quickjs"
     ],
-    "includePlatforms": [],
+    "includePlatforms": [
+        "Editor"
+    ],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,

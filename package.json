@@ -1,6 +1,6 @@
 {
   "name": "com.polyfork.connector",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "displayName": "Polyfork for Unity",
   "description": "The Polyfork store, inside Unity. Browse the polyfork.dev catalogue in an editor window, turn the same typed knobs the web viewer exposes, preview the result live, and import it into your project as a .glb with your colours baked in. Also ships a runtime API for streaming and remixing assets at play time. Every parameter name, label, range, option and palette is read from Polyfork's own machine-readable schema - nothing is invented client-side.",
   "unity": "6000.0",
@@ -30,11 +30,6 @@
       "displayName": "Runtime API",
       "description": "Loads the catalogue at play time, spawns an asset and drives a knob from script. Start here if you want Polyfork assets in a running game rather than imported into the project.",
       "path": "Samples~/RuntimeApi"
-    },
-    {
-      "displayName": "Local Baking (optional)",
-      "description": "Bakes geometry on-device instead of calling the remix endpoint, for offline use or to avoid the hourly quota. Requires the PuerTS core and QuickJS packages. Carries a trimmed three.js build, which is why it is a sample: importing it is opt-in, so projects that do not use local baking never ship the payload.",
-      "path": "Samples~/LocalBaking"
     }
   ]
 }
