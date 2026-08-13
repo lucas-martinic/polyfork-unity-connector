@@ -5,6 +5,35 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-08-13
+
+### Changed
+
+- **The shadow is hard and shaped like the model.** The soft blob was a radial gradient — it
+  always drew, but it was not the shape of anything. It is a planar projection now: the
+  vertex shader flattens the mesh onto the ground along the light direction, so the
+  silhouette is the model's own and the edge is as crisp as its geometry. Still drawn rather
+  than cast, because `PreviewRenderUtility`'s real shadows cannot be relied on, and still
+  pipeline-independent because it is only a mesh with a material.
+
+  A stencil test keeps each pixel to a single draw. Without it a projected mesh blends
+  against itself wherever the silhouette self-covers, and the shadow becomes a patchwork of
+  darker blotches instead of one flat shape.
+
+### Fixed
+
+- **The camera started underneath the model.** The default orbit pitch was negative, and
+  pitch is applied as `Euler(pitch, yaw, 0)`, so the camera began below looking up. It now
+  starts slightly above, the way a product shot is framed.
+- **The camera no longer drifts while you turn knobs.** It orbited `bounds.center`, read
+  live, and bounds move whenever a knob changes the silhouette — so the camera chased its
+  subject on every rebuild, which reads as the camera moving rather than the model changing.
+  Framing is captured when an asset is opened and not touched again.
+
+### Added
+
+- **Escape returns to the catalogue** from the remix screen.
+
 ## [0.5.5] - 2026-08-13
 
 ### Fixed

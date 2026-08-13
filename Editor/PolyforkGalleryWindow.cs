@@ -797,9 +797,18 @@ namespace Polyfork.EditorTools
         /// </summary>
         void DrawRemixScreen()
         {
+            // Escape leaves, which is what escape does everywhere else.
+            if (Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Escape)
+            {
+                _remixing = false;
+                Event.current.Use();
+                GUIUtility.ExitGUI();
+            }
+
             using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
             {
-                if (GUILayout.Button("\u2190  Back to catalogue", EditorStyles.toolbarButton, GUILayout.Width(150f)))
+                if (GUILayout.Button("\u2190  Back to catalogue  (Esc)", EditorStyles.toolbarButton,
+                        GUILayout.Width(180f)))
                 {
                     _remixing = false;
                     GUIUtility.ExitGUI();     // the layout below belongs to a screen that is gone

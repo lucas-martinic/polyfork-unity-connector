@@ -18,18 +18,26 @@ namespace Polyfork.EditorTools
 
         PreviewRenderUtility _utility;
 
-        /* No ground plane.
+        /* No ground plane and no shadow-catcher object.
          *
-         * There was one, lit by the same key and rim as the model, and it could not be made
-         * to match the background: what you see from a lit surface is albedo times lighting,
-         * never a flat colour, so setting its albedo to the sky colour still left a visible
-         * horizon. Unlit and exactly the sky colour, a plane is indistinguishable from no
-         * plane - so this is that, with one fewer object, material and pipeline question.
-         * The contact shadow is what says the model is standing on something. */
-        GameObject _contact;
+         * A lit plane could not be made to match the background - what a lit surface shows is
+         * albedo times lighting, never a flat colour - and unlit at exactly the sky colour a
+         * plane is indistinguishable from no plane. The shadow is projected geometry instead,
+         * so there is nothing left for a plane to catch. */
+        static readonly int GroundYId = Shader.PropertyToID("_GroundY");
+        static readonly int LightDirId = Shader.PropertyToID("_LightDir");
+
+        /// <summary>Matches the key light set up in EnsureUtility: it sits at (4, 7, 5).</summary>
+        static readonly Vector4 KeyLightDirection = new Vector3(4f, 7f, 5f).normalized;
         GameObject _target;
-        Vector2 _orbit = new(25f, -25f);
+        /* x is yaw, y is PITCH, and pitch is applied as Quaternion.Euler(pitch, yaw, 0) -
+         * so a negative pitch puts the camera below the model looking up, which is where it
+         * used to start. Product shots look slightly down at the subject. */
+        Vector2 _orbit = new(25f, 18f);
         float _distance = 2.2f;
+
+        /// <summary>What the camera orbits. Set by Frame, never by a rebuild.</summary>
+        Vector3 _focus;
         Bounds _bounds;
 
         void EnsureUtility()
@@ -90,67 +98,57 @@ namespace Polyfork.EditorTools
 
             _bounds = PolyforkSpawner.CalculateBounds(_target);
 
-            EnsureContactShadow();
-            PlaceContactShadow();
+            ApplyPlanarShadow(_target);
 
             if (frameCamera || !hadTarget) Frame();
         }
 
-        /// <summary>Pulls the camera back to fit the current target.</summary>
+        /// <summary>
+        /// Pulls the camera back to fit the current target, and pins what it looks at.
+        ///
+        /// The focus is captured here rather than read from the bounds every frame. Bounds
+        /// move when a knob changes the silhouette, so reading them live meant the camera
+        /// drifted after its subject on every rebuild - which reads as the camera moving
+        /// rather than the model changing, and that is backwards. Framing is a thing that
+        /// happens when an asset is opened, and not again until it is asked for.
+        /// </summary>
         public void Frame()
         {
             var size = Mathf.Max(_bounds.size.x, _bounds.size.y, _bounds.size.z);
             _distance = Mathf.Max(0.4f, size * 2.6f);
+            _focus = _bounds.center;
         }
 
         /// <summary>
-        /// The blob the model sits in. Drawn rather than cast: see the shader's own note on
-        /// why a real-time shadow cannot be relied on inside a preview scene.
+        /// Flattens the model onto the ground as a second draw of the same mesh.
+        ///
+        /// Adding the shadow material to each renderer's list is what makes Unity draw the
+        /// mesh twice: once in colour, once projected. Cheaper than a duplicate hierarchy,
+        /// and it cannot drift out of sync with what it is shadowing.
         /// </summary>
-        void EnsureContactShadow()
+        void ApplyPlanarShadow(GameObject root)
         {
-            if (_contact != null) return;
-
-            var shader = Shader.Find("Polyfork/Contact Shadow");
+            var shader = Shader.Find("Polyfork/Planar Shadow");
             if (shader == null) return;      // cosmetic; never worth failing a preview over
 
-            _contact = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            _contact.name = "Polyfork Contact Shadow";
-            _contact.hideFlags = HideFlags.HideAndDontSave;
-
-            var collider = _contact.GetComponent<Collider>();
-            if (collider != null) UnityEngine.Object.DestroyImmediate(collider);
-
-            var renderer = _contact.GetComponent<MeshRenderer>();
-            renderer.sharedMaterial = new Material(shader)
+            // Per target, so the existing cleanup frees it along with everything else the
+            // preview generated.
+            var shadow = new Material(shader)
             {
-                name = "Polyfork Contact Shadow",
+                name = "Polyfork Planar Shadow",
                 hideFlags = HideFlags.HideAndDontSave
             };
-            renderer.shadowCastingMode = ShadowCastingMode.Off;
-            renderer.receiveShadows = false;
 
-            // A quad faces +Z; lay it flat.
-            _contact.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+            shadow.SetFloat(GroundYId, _bounds.min.y);
+            shadow.SetVector(LightDirId, KeyLightDirection);
 
-            _utility.AddSingleGO(_contact);
-        }
-
-        /// <summary>Sits the shadow under the model.</summary>
-        void PlaceContactShadow()
-        {
-            var span = Mathf.Max(_bounds.size.x, _bounds.size.z, 0.2f);
-            var floor = _bounds.min.y;
-
-            if (_contact != null)
+            foreach (var renderer in root.GetComponentsInChildren<MeshRenderer>(true))
             {
-                // Wider than the model's footprint so the falloff has somewhere to go, and
-                // offset along the key light so the model looks lit rather than pinned.
-                _contact.transform.localScale = Vector3.one * (span * 2.1f);
-                _contact.transform.position = new Vector3(
-                    _bounds.center.x - span * 0.06f,
-                    floor - span * 0.002f,       // just under the model's lowest point
-                    _bounds.center.z - span * 0.05f);
+                var materials = renderer.sharedMaterials;
+                var extended = new Material[materials.Length + 1];
+                materials.CopyTo(extended, 0);
+                extended[materials.Length] = shadow;
+                renderer.sharedMaterials = extended;
             }
         }
 
@@ -219,8 +217,7 @@ namespace Polyfork.EditorTools
             _utility.BeginPreview(rect, GUIStyle.none);
 
             var rotation = Quaternion.Euler(_orbit.y, _orbit.x, 0f);
-            var focus = _bounds.center;
-            _utility.camera.transform.position = focus + rotation * (Vector3.back * _distance);
+            _utility.camera.transform.position = _focus + rotation * (Vector3.back * _distance);
             _utility.camera.transform.rotation = rotation;
 
             _utility.Render(allowScriptableRenderPipeline: true);
@@ -276,13 +273,6 @@ namespace Polyfork.EditorTools
         {
             Clear();
 
-            // Its material is generated too, and outlives the GameObject the same way.
-            if (_contact != null)
-            {
-                ReleaseGeneratedMaterials(_contact);
-                UnityEngine.Object.DestroyImmediate(_contact);
-                _contact = null;
-            }
 
             _utility?.Cleanup();
             _utility = null;
