@@ -5,6 +5,24 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-08-13
+
+### Changed
+
+- **Thumbnails load smoothly while scrolling.** The downloads were always asynchronous; what
+  was not paced was everything they triggered on arrival, all of it on the main thread:
+
+  - **One repaint per thumbnail.** A repaint re-renders the 3D preview too, so twenty
+    thumbnails landing meant twenty forced full redraws. Repaints are now coalesced to at
+    most one every 80 ms.
+  - **Every PNG decoded the moment it landed.** `LoadImage` decodes on the main thread, so a
+    batch finishing together dropped a frame. Textures are now built two per editor tick —
+    about 120 a second, faster than anyone scrolls and never a visible stall.
+  - **No cap on concurrent downloads.** A flick down the catalogue opened a request per card,
+    which makes nothing arrive sooner; it just puts the thumbnail you are looking at behind
+    ninety you have already passed. Six at a time now, and the queue is a stack, so the most
+    recently requested — the ones on screen — are served first.
+
 ## [0.6.3] - 2026-08-13
 
 ### Fixed
