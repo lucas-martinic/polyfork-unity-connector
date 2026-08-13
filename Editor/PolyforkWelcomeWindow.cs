@@ -213,32 +213,40 @@ namespace Polyfork.EditorTools
                 EditorGUILayout.LabelField(_access.UpgradeNote, EditorStyles.wordWrappedMiniLabel);
         }
 
+        /// <summary>
+        /// Swaps this window for another on the next editor tick.
+        ///
+        /// Closing a window inside its own OnGUI and immediately opening another leaves the
+        /// new one created mid-pass through a dying window: it comes up blank and only fills
+        /// in once something forces a repaint, which is why "start browsing" opened an empty
+        /// gallery until you hit Refresh. Deferring lets this GUI pass finish first.
+        /// </summary>
+        void SwapFor(Action open)
+        {
+            EditorApplication.delayCall += () =>
+            {
+                Close();
+                open();
+            };
+        }
+
         void DrawActions()
         {
             // Signed in already? Then the only useful button is the one into the catalogue.
             if (SignedIn)
             {
                 if (GUILayout.Button("Browse the catalogue", GUILayout.Height(32f)))
-                {
-                    Close();
-                    PolyforkGalleryWindow.Open();
-                }
+                    SwapFor(PolyforkGalleryWindow.Open);
             }
             else
             {
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     if (GUILayout.Button("Start browsing — it's free", GUILayout.Height(32f)))
-                    {
-                        Close();
-                        PolyforkGalleryWindow.Open();
-                    }
+                        SwapFor(PolyforkGalleryWindow.Open);
 
                     if (GUILayout.Button("I have a key", GUILayout.Height(32f), GUILayout.Width(120f)))
-                    {
-                        Close();
-                        PolyforkApiKeyWindow.Open();
-                    }
+                        SwapFor(() => PolyforkApiKeyWindow.Open());
                 }
             }
 

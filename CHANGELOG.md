@@ -5,6 +5,31 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2026-08-13
+
+### Fixed
+
+- **Opening the gallery from the welcome screen showed an empty window** until you hit
+  Refresh. The welcome window closed itself and opened the gallery inside the same OnGUI
+  pass, so the gallery was created through a dying window and came up blank; the catalogue
+  had loaded, nothing had repainted. Both windows now hand over on the next editor tick.
+
+### Added
+
+- **A one-button PuerTS install** in `Polyfork ▸ Make Bakes Instant…`. It resolves the
+  newest PuerTS release, downloads the core and QuickJS tarballs **from that same release**,
+  and adds both in a single `AddAndRemove` call. Taking both from one release is what makes
+  the version mismatch structurally impossible rather than something to be careful about.
+
+  It confirms before doing anything, naming the version, the size and the source, because it
+  downloads third-party native plugins and edits the project manifest. The manual steps stay
+  in the window for anyone who would rather not. Tarballs are saved to `Packages/PuerTS/`
+  rather than a temp folder, since the manifest stores the path.
+- **The API key window says where the active key came from** — environment variable,
+  EditorPrefs, or a key file. EditorPrefs is shared by every project on the machine, so a key
+  entered once anywhere silently applies everywhere; arriving at a project already signed in
+  with no memory of doing it is unsettling rather than convenient.
+
 ## [0.3.1] - 2026-08-13
 
 ### Fixed

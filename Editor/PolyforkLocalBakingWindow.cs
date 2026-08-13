@@ -1,8 +1,14 @@
 using System;
+using System.IO;
 using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEditor.PackageManager;
+using UnityEditor.PackageManager.Requests;
 using UnityEngine;
+using UnityEngine.Networking;
 
 namespace Polyfork.EditorTools
 {
@@ -77,8 +83,9 @@ namespace Polyfork.EditorTools
             EditorGUILayout.Space(10f);
             if (GUILayout.Button("Browse assets", GUILayout.Height(26f)))
             {
-                Close();
-                PolyforkGalleryWindow.Open();
+                // Deferred for the same reason the welcome window defers: a window opened
+                // from inside a closing window's OnGUI comes up blank.
+                EditorApplication.delayCall += () => { Close(); PolyforkGalleryWindow.Open(); };
             }
         }
 
@@ -108,18 +115,34 @@ namespace Polyfork.EditorTools
                 "not match. Mixing them installs cleanly and then never works.",
                 MessageType.Warning);
 
-            EditorGUILayout.Space(4f);
-            Step(1, $"Download PuerTS_Core_<version> and PuerTS_Quickjs_<version> from the releases page.");
+            EditorGUILayout.Space(6f);
+
+            using (new EditorGUI.DisabledScope(_installing))
+            {
+                if (GUILayout.Button(
+                        _installing ? "Installing…" : "Install PuerTS for me",
+                        GUILayout.Height(32f)))
+                {
+                    _ = InstallAsync();
+                }
+            }
+
+            if (_installStatus != null)
+                EditorGUILayout.LabelField(_installStatus, EditorStyles.wordWrappedMiniLabel);
+
+            EditorGUILayout.Space(8f);
+            EditorGUILayout.LabelField("Or do it by hand", EditorStyles.miniBoldLabel);
+            Step(1, "Download PuerTS_Core_<version> and PuerTS_Quickjs_<version> from the releases page.");
             Step(2, "Window ▸ Package Manager ▸ + ▸ Add package from tarball…, and add each one.");
             Step(3, "Come back here — this window turns green on its own once the engine registers.");
 
-            EditorGUILayout.Space(10f);
+            EditorGUILayout.Space(8f);
             using (new EditorGUILayout.HorizontalScope())
             {
-                if (GUILayout.Button("Open releases page", GUILayout.Height(26f)))
+                if (GUILayout.Button("Open releases page", EditorStyles.miniButton))
                     Application.OpenURL(ReleasesUrl);
 
-                if (GUILayout.Button("Copy package names", GUILayout.Height(26f)))
+                if (GUILayout.Button("Copy package names", EditorStyles.miniButton))
                 {
                     EditorGUIUtility.systemCopyBuffer = $"{CorePackage}\n{QuickJsPackage}";
                     ShowNotification(new GUIContent("Copied"));
@@ -191,6 +214,172 @@ namespace Polyfork.EditorTools
                 return null;
             }
         }
+
+        // =====================================================================
+        // One-button install
+        // =====================================================================
+
+        bool _installing;
+        string _installStatus;
+        AddAndRemoveRequest _addRequest;
+
+        /// <summary>Where the tarballs are kept. Inside the project, because the manifest
+        /// stores the path: a tarball in a temp folder breaks the package on the next
+        /// resolve, and a relative path under Packages/ still works on a teammate's
+        /// machine.</summary>
+        static string TarballDir =>
+            Path.Combine(Path.GetDirectoryName(Application.dataPath) ?? ".", "Packages", "PuerTS");
+
+        /// <summary>
+        /// Downloads a matched pair of PuerTS packages and adds both to the project.
+        ///
+        /// Taking both from ONE release is the point: that is what makes the version trap
+        /// structurally impossible rather than something the user has to be careful about.
+        /// They are added in a single AddAndRemove call for the same reason - QuickJS
+        /// depends on the core, so resolving them together is the only ordering that works.
+        /// </summary>
+        async Task InstallAsync()
+        {
+            _installing = true;
+            _installStatus = "Looking up the latest PuerTS release...";
+            Repaint();
+
+            try
+            {
+                var (tag, core, quickjs) = await FindReleaseAsync();
+                if (core == null || quickjs == null)
+                {
+                    _installStatus = "Could not find a release with both packages. Use the manual steps below.";
+                    return;
+                }
+
+                var mb = (core.size + quickjs.size) / 1048576f;
+
+                /* Confirmed at the moment of the click, not warned about in advance: this
+                 * downloads third-party native plugins from the internet and edits the
+                 * project manifest, which is not something to do because a window was open. */
+                if (!EditorUtility.DisplayDialog(
+                        "Install PuerTS?",
+                        $"Downloads PuerTS {tag} ({mb:0.#} MB) from github.com/Tencent/puerts:\n\n" +
+                        $"  {core.name}\n  {quickjs.name}\n\n" +
+                        $"They are saved to Packages/PuerTS/ and added to this project. Both come " +
+                        $"from the same release, so their versions match.\n\n" +
+                        "PuerTS is MIT-licensed and includes native plugins.",
+                        "Install", "Cancel"))
+                {
+                    _installStatus = null;
+                    return;
+                }
+
+                Directory.CreateDirectory(TarballDir);
+
+                foreach (var asset in new[] { core, quickjs })
+                {
+                    _installStatus = $"Downloading {asset.name}...";
+                    Repaint();
+
+                    var bytes = await DownloadAsync(asset.url);
+                    File.WriteAllBytes(Path.Combine(TarballDir, asset.name), bytes);
+                }
+
+                _installStatus = "Adding the packages to the project...";
+                Repaint();
+
+                // Relative to the Packages folder, which is how Unity resolves a file: path.
+                _addRequest = Client.AddAndRemove(new[]
+                {
+                    $"file:PuerTS/{core.name}",
+                    $"file:PuerTS/{quickjs.name}"
+                });
+
+                EditorApplication.update += PollAdd;
+            }
+            catch (Exception e)
+            {
+                _installing = false;
+                _installStatus = $"Install failed: {e.Message}. The manual steps below still work.";
+                Debug.LogWarning($"[Polyfork] PuerTS install failed: {e}");
+            }
+            finally
+            {
+                EditorUtility.ClearProgressBar();
+                Repaint();
+            }
+        }
+
+        void PollAdd()
+        {
+            if (_addRequest is not { IsCompleted: true }) return;
+
+            EditorApplication.update -= PollAdd;
+            _installing = false;
+
+            _installStatus = _addRequest.Status == StatusCode.Success
+                ? "Installed. Unity will recompile, and this window turns green once the engine registers."
+                : $"Unity could not add the packages: {_addRequest.Error?.message}. Try the manual steps below.";
+
+            _addRequest = null;
+            Repaint();
+        }
+
+        /// <summary>The newest Unity release carrying both packages.</summary>
+        static async Task<(string tag, ReleaseAsset core, ReleaseAsset quickjs)> FindReleaseAsync()
+        {
+            var json = await DownloadStringAsync("https://api.github.com/repos/Tencent/puerts/releases?per_page=20");
+
+            foreach (var release in JArray.Parse(json))
+            {
+                var tag = (string)release["tag_name"] ?? "";
+                if (!tag.StartsWith("Unity_v", StringComparison.Ordinal)) continue;
+
+                ReleaseAsset core = null, quickjs = null;
+                foreach (var a in release["assets"] ?? (JToken)new JArray())
+                {
+                    var name = (string)a["name"] ?? "";
+                    if (!name.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase)) continue;
+
+                    var item = new ReleaseAsset
+                    {
+                        name = name,
+                        url = (string)a["browser_download_url"],
+                        size = a["size"]?.Value<long>() ?? 0
+                    };
+
+                    if (name.StartsWith("PuerTS_Core_", StringComparison.OrdinalIgnoreCase)) core = item;
+                    else if (name.StartsWith("PuerTS_Quickjs_", StringComparison.OrdinalIgnoreCase)) quickjs = item;
+                }
+
+                if (core != null && quickjs != null) return (tag, core, quickjs);
+            }
+
+            return (null, null, null);
+        }
+
+        sealed class ReleaseAsset
+        {
+            public string name;
+            public string url;
+            public long size;
+        }
+
+        /* Its own transport, deliberately. PolyforkClient attaches the Polyfork API key to
+         * every request it makes, and these requests go to github.com. */
+        static async Task<byte[]> DownloadAsync(string url)
+        {
+            using var req = UnityWebRequest.Get(url);
+            req.SetRequestHeader("User-Agent", "polyfork-unity-connector");   // GitHub rejects requests without one
+            req.timeout = 300;
+
+            await req.SendWebRequestAsync();
+
+            if (req.result != UnityWebRequest.Result.Success)
+                throw new Exception($"{url}: {req.error}");
+
+            return req.downloadHandler.data;
+        }
+
+        static async Task<string> DownloadStringAsync(string url)
+            => Encoding.UTF8.GetString(await DownloadAsync(url));
 
         void OnInspectorUpdate() => Repaint();   // so it flips to green without being poked
     }

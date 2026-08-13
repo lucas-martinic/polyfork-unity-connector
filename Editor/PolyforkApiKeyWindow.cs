@@ -27,6 +27,35 @@ namespace Polyfork.EditorTools
             window._retryAfter = retryAfter;
         }
 
+        /// <summary>
+        /// Where the key in force actually came from.
+        ///
+        /// A key resolves from the environment, this window's EditorPrefs entry, or a
+        /// polyfork.key file, and EditorPrefs is shared by every project on the machine - so
+        /// a key typed once, anywhere, silently applies everywhere afterwards. Finding
+        /// yourself already signed in with no memory of doing it is unsettling rather than
+        /// convenient, so the window says which one it is.
+        /// </summary>
+        static void DrawActiveKeySource()
+        {
+            var key = PolyforkCredentials.Resolve(null, out var source);
+            if (string.IsNullOrEmpty(key)) return;
+
+            var where = source switch
+            {
+                PolyforkCredentials.Source.Environment =>
+                    $"the {PolyforkCredentials.EnvironmentVariable} environment variable",
+                PolyforkCredentials.Source.EditorSettings =>
+                    "this editor's saved key (EditorPrefs, shared across all your projects)",
+                PolyforkCredentials.Source.StreamingAssets => $"StreamingAssets/{PolyforkCredentials.KeyFileName}",
+                PolyforkCredentials.Source.PersistentData => $"persistentDataPath/{PolyforkCredentials.KeyFileName}",
+                _ => "the component inspector"
+            };
+
+            EditorGUILayout.HelpBox($"A key is already active, from {where}.", MessageType.Info);
+            EditorGUILayout.Space(4f);
+        }
+
         [MenuItem("Polyfork/API Key…", priority = 1)]
         [MenuItem("Window/Polyfork/API Key…", priority = 1101)]
         public static PolyforkApiKeyWindow Open()
@@ -44,6 +73,8 @@ namespace Polyfork.EditorTools
         {
             PolyforkBrand.DrawHeader("Lifts the remix cap and unlocks paid downloads");
             EditorGUILayout.Space(6f);
+
+            DrawActiveKeySource();
 
             if (_wasRateLimited)
             {

@@ -222,8 +222,11 @@ it counts against your hourly allowance. Install a JavaScript engine and the edi
 asset's **own `createAsset()` module** instead — the same program the store runs — so a
 slider costs CPU rather than a request.
 
-**Polyfork ▸ Make Bakes Instant…** walks you through it and reports when it has worked.
-The short version:
+**Polyfork ▸ Make Bakes Instant…** has an *Install PuerTS for me* button that downloads a
+matched pair and adds both to the project. It asks first, and tells you what it is about to
+fetch and from where.
+
+By hand instead:
 
 1. From one PuerTS release, download **both** `PuerTS_Core_<version>` and
    `PuerTS_Quickjs_<version>`: <https://github.com/Tencent/puerts/releases>
