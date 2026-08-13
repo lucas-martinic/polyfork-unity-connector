@@ -5,6 +5,28 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2] - 2026-08-13
+
+### Fixed
+
+- **Some assets never previewed at all — "No preview", forever.** Two causes, both ours.
+
+  A local bake that *threw* ended the preview. Only a `null` return fell back to the server;
+  an exception propagated, got logged, and left an empty viewport. Rigged assets are the case
+  that found this — `field-console-a92adc` has a `screen-head` rig, and the bridge returns its
+  hierarchy without geometry, so the bake threw "produced no meshes" and the asset simply
+  never appeared. Both failure modes now get the same second chance on the server.
+
+  Separately, the rebuild was gated on the allowance even when the rebuild would not spend
+  any. An asset at its defaults is a plain file fetch of the public preview GLB, so running
+  out of bakes was stopping the gallery from displaying things that were free to display.
+  The gate now asks whether *this* rebuild would be metered.
+
+- **The local baker no longer retries an asset it has already failed on.** Otherwise every
+  knob change on such an asset pays twice — a bake that cannot work, then the fetch that
+  does — turning one bad asset into a permanently sluggish one. Session-scoped, so a fresh
+  window gets to find out for itself.
+
 ## [0.6.1] - 2026-08-13
 
 ### Changed

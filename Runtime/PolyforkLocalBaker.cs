@@ -103,7 +103,17 @@ namespace Polyfork
         /// download field reports: free assets publish it to everyone, paid assets need a key.
         /// </summary>
         public bool CanBake(PolyforkAsset asset, PolyforkParams schema)
-            => asset != null && asset.HasModule;
+            => asset != null && asset.HasModule && !_unbakeable.Contains(asset.Id);
+
+        /// <summary>
+        /// Assets this runtime has already failed on, so it stops offering to try again.
+        ///
+        /// Without it a knob change on such an asset pays twice every time - a bake that
+        /// cannot work, then the server fetch that does - which turns one bad asset into a
+        /// permanently sluggish one. Session-scoped: a new window gets to find out for itself,
+        /// since the reason may have been a module that had not downloaded yet.
+        /// </summary>
+        readonly HashSet<string> _unbakeable = new();
 
         /// <summary>
         /// Everything the schema declares. Running the real program means there is no knob
@@ -129,14 +139,22 @@ namespace Polyfork
             var bakeMs = watch.Elapsed.TotalMilliseconds;
 
             if (string.IsNullOrEmpty(payloadJson))
+            {
+                _unbakeable.Add(request.Asset.Id);
                 throw new PolyforkBakeUnavailableException($"The module for {request.Asset.Id} produced nothing.");
+            }
 
             watch.Restart();
             var payload = PolyforkMeshPayload.Parse(payloadJson);
             var decodeMs = watch.Elapsed.TotalMilliseconds;
 
             if (payload.Meshes.Count == 0)
-                throw new PolyforkBakeUnavailableException($"The module for {request.Asset.Id} produced no meshes.");
+            {
+                _unbakeable.Add(request.Asset.Id);
+                throw new PolyforkBakeUnavailableException(
+                    $"The module for {request.Asset.Id} produced no meshes. Rigged assets are the known " +
+                    "case: the bridge returns their hierarchy without geometry.");
+            }
 
             /* A local bake is supposed to beat a ~120 ms round trip; when it does not, the
              * split says which half to look at. Silent above the threshold, so a working
@@ -192,6 +210,7 @@ namespace Polyfork
             }
             catch (Exception e)
             {
+                _unbakeable.Add(asset.Id);
                 Debug.LogWarning($"[Polyfork] could not load the module for {asset.Id} ({e.Message}); " +
                                  "falling back to the server baker.");
                 return false;

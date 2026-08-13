@@ -257,7 +257,14 @@ namespace Polyfork.EditorTools
         {
             // Geometry rebuilds need the network, so hold them while capped rather than
             // firing requests that can only fail. Colour edits are local and unaffected.
-            if (_previewDirty && !_rebuilding && !BlockedByAllowance &&
+            /* Gated on whether this particular rebuild would spend anything. An asset at its
+             * defaults is a plain file fetch, so it must still load when the allowance is
+             * gone - otherwise running out of bakes leaves the gallery unable to show
+             * anything at all, which is how "No preview" happened to assets that were free
+             * to display. */
+            var wouldMeter = BlockedByAllowance && BuildGeometryValues().Count > 0;
+
+            if (_previewDirty && !_rebuilding && !wouldMeter &&
                 EditorApplication.timeSinceStartup >= _rebuildAt)
             {
                 _previewDirty = false;
@@ -515,19 +522,37 @@ namespace Polyfork.EditorTools
                 var request = new PolyforkBakeRequest(asset, _schema, payload);
                 var meters = baker.ConsumesAllowance && payload.Count > 0;
 
-                var go = await baker.BakeAsync(request, _cts.Token);
-
-                /* A baker returning null is a failure it chose not to throw for - a module
-                 * that would not fetch, a bake that produced nothing. Falling straight through
-                 * to an empty preview would read as a broken asset, so the server gets a turn
-                 * before giving up: slower and metered, but it is the path that always works. */
-                if (go == null && baker != _bakers.Bakers.LastOrDefault(b => b.ConsumesAllowance))
+                GameObject go;
+                try
                 {
-                    var fallback = _bakers.Bakers.LastOrDefault(b => b.ConsumesAllowance && b.IsAvailable);
-                    if (fallback != null && !IsRateLimited)
+                    go = await baker.BakeAsync(request, _cts.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception e) when (baker.ConsumesAllowance == false)
+                {
+                    /* A local bake that throws used to end the preview. It is not a reason to
+                     * show the user nothing: the server can build the same asset, and it is
+                     * the path that always works. Rigged assets are the case that found this -
+                     * the module produces a hierarchy the bridge does not return meshes for,
+                     * so the bake threw and Field Console simply never appeared. */
+                    Debug.LogWarning($"[Polyfork] {baker.Name} could not build {asset.Id} ({e.Message}).");
+                    go = null;
+                }
+
+                // Either failure mode - nothing returned, or a throw - gets the same second
+                // chance on whichever baker actually talks to polyfork.dev.
+                if (go == null && !baker.ConsumesAllowance)
+                {
+                    var fallback = _bakers.Bakers.FirstOrDefault(b => b.ConsumesAllowance && b.IsAvailable);
+
+                    // The baseline preview is a plain file fetch and costs no allowance, so
+                    // being rate limited only rules out a fallback that would bake something.
+                    if (fallback != null && (!IsRateLimited || payload.Count == 0))
                     {
-                        Debug.LogWarning(
-                            $"[Polyfork] {baker.Name} produced nothing for {asset.Id}; rebuilding on {fallback.Name}.");
+                        Debug.Log($"[Polyfork] rebuilding {asset.Id} on {fallback.Name}.");
 
                         meters = fallback.ConsumesAllowance && payload.Count > 0;
                         go = await fallback.BakeAsync(request, _cts.Token);
