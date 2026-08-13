@@ -1400,8 +1400,11 @@ namespace Polyfork.EditorTools
             _importMessageType = MessageType.Info;
             Repaint();
 
+            /* All the values, not just geometry: a local import runs the module, which honours
+             * colour too, and the server path strips what it cannot use anyway. */
             var result = await PolyforkAssetImporter.ImportAsync(
-                _client, _loader, asset, _schema, BuildGeometryValues(), _slotColors, _importFolder, _cts.Token);
+                _client, _loader, asset, _schema, BuildAllValues(), _slotColors, _importFolder,
+                _bakers.Resolve(asset, _schema), _cts.Token);
 
             if (result.Success)
             {

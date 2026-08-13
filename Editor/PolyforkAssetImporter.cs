@@ -47,6 +47,7 @@ namespace Polyfork.EditorTools
             PolyforkKnobValues geometry,
             IReadOnlyDictionary<string, Color> slotColors,
             string folder = DefaultFolder,
+            IPolyforkBaker baker = null,
             CancellationToken ct = default)
         {
             var result = new Result();
@@ -55,6 +56,22 @@ namespace Polyfork.EditorTools
             try
             {
                 var payload = StripDefaults(schema, geometry);
+
+                /* If something here can build the asset without asking polyfork.dev, use it.
+                 *
+                 * Importing a remixed FREE asset used to demand a server bake and could be
+                 * refused for want of allowance - on an asset the editor was, at that moment,
+                 * rebuilding locally and for nothing on every slider move. The mesh in the
+                 * preview and the mesh being imported are the same mesh; only one of them was
+                 * being metered. */
+                if (baker is { ConsumesAllowance: false } && baker.CanBake(asset, schema))
+                {
+                    var local = await ImportFromBakerAsync(baker, asset, schema, geometry, folder, ct);
+                    if (local != null) return local;
+
+                    // Fell through: the local bake could not produce it, so buy it as usual.
+                }
+
                 var url = payload.Count == 0
                     ? asset.PreviewGlb
                     : client.RemixGlbUrl(asset.Id, payload);
@@ -135,6 +152,58 @@ namespace Polyfork.EditorTools
             {
                 result.Error = e.Message;
                 return result;
+            }
+            finally
+            {
+                if (staging != null) UnityEngine.Object.DestroyImmediate(staging);
+            }
+        }
+
+        /// <summary>
+        /// Writes the asset straight out of a local bake, or null if it could not.
+        ///
+        /// The module honours colour as well as geometry, so what it returns is already the
+        /// finished thing - no download to fetch and no slots to repaint afterwards.
+        /// </summary>
+        static async Task<Result> ImportFromBakerAsync(
+            IPolyforkBaker baker,
+            PolyforkAsset asset,
+            PolyforkParams schema,
+            PolyforkKnobValues values,
+            string folder,
+            CancellationToken ct)
+        {
+            GameObject staging = null;
+            try
+            {
+                staging = await baker.BakeAsync(new PolyforkBakeRequest(asset, schema, values), ct);
+                if (staging == null) return null;
+
+                Directory.CreateDirectory(folder);
+                var fileName = BuildFileName(asset, StripDefaults(schema, values), null, schema);
+                var assetPath = AssetDatabase.GenerateUniqueAssetPath(
+                    Path.Combine(folder, fileName).Replace('\\', '/'));
+
+                var export = new GameObjectExport(new ExportSettings
+                {
+                    Format = GltfFormat.Binary,
+                    Deterministic = true
+                });
+                export.AddScene(new[] { staging }, asset.Title ?? asset.Id);
+
+                if (!await export.SaveToFileAndDispose(assetPath, ct)) return null;
+
+                AssetDatabase.ImportAsset(assetPath);
+                return new Result { Success = true, AssetPath = assetPath, ColorsBaked = true };
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Polyfork] local import of {asset.Id} failed ({e.Message}); using the server.");
+                return null;
             }
             finally
             {

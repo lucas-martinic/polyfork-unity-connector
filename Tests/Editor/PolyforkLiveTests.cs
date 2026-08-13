@@ -295,7 +295,8 @@ namespace Polyfork.Tests
                 client, loader, assetTask.Result, schema,
                 geometry,
                 colors,
-                "Assets/Polyfork.Tests");
+                "Assets/Polyfork.Tests",
+                null);
 
             yield return Await(importTask);
 

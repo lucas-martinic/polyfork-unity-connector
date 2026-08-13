@@ -5,6 +5,24 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.3] - 2026-08-13
+
+### Fixed
+
+- **Importing a remixed free asset asked for an API key it did not need.** The import always
+  bought its mesh from the remix endpoint, so it could be refused for want of allowance — on
+  an asset the editor was, at that moment, rebuilding locally and for free on every slider
+  move. The mesh in the preview and the mesh being imported are the same mesh; only one of
+  them was metered.
+
+  Import now goes through the same baker as the preview. When that is the local one, the
+  module builds the asset here and glTFast writes it straight out: no download, no allowance,
+  and colour already baked in because the module honours it. The server path is unchanged and
+  still takes over if the local bake cannot produce the asset.
+- **"It resets in about 26027 minutes."** True — the anonymous allowance is monthly, so
+  `Retry-After` really is days — and unreadable. Past 36 hours it now names the date, past
+  two hours it says hours.
+
 ## [0.6.2] - 2026-08-13
 
 ### Fixed

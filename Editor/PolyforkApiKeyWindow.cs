@@ -78,13 +78,20 @@ namespace Polyfork.EditorTools
 
             if (_wasRateLimited)
             {
-                var wait = _retryAfter.TotalMinutes >= 1
-                    ? $"{_retryAfter.TotalMinutes:0} minute{(_retryAfter.TotalMinutes >= 2 ? "s" : "")}"
-                    : $"{_retryAfter.TotalSeconds:0} seconds";
+                /* The anonymous allowance is monthly, so Retry-After is genuinely days -
+                 * and "resets in about 26027 minutes" is a true sentence nobody can read.
+                 * Past a couple of hours the useful answer is a date. */
+                var wait = _retryAfter.TotalHours >= 36
+                    ? $"on {DateTime.Now.Add(_retryAfter):d MMMM}"
+                    : _retryAfter.TotalHours >= 2
+                        ? $"in about {_retryAfter.TotalHours:0} hours"
+                        : _retryAfter.TotalMinutes >= 1
+                            ? $"in about {_retryAfter.TotalMinutes:0} minute{(_retryAfter.TotalMinutes >= 2 ? "s" : "")}"
+                            : $"in {_retryAfter.TotalSeconds:0} seconds";
 
                 EditorGUILayout.HelpBox(
                     $"Polyfork limits remixes on unauthenticated connections, and this one has hit the cap. " +
-                    $"It resets in about {wait}.\n\n" +
+                    $"It resets {wait}.\n\n" +
                     "Adding an API key lifts the limit and unlocks downloads for paid assets.",
                     MessageType.Warning);
             }
