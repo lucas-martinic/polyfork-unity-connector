@@ -3,7 +3,7 @@
 
 The Asset Store's UPM uploader takes a PACKAGE, not a file: you point it at a package in the
 project and it uploads from there. So the artifact to hand over is a folder that drops into
-`<project>/Packages/dev.polyfork.unity/`, not an archive Unity has to import.
+`<project>/Packages/dev.polyfork.connector/`, not an archive Unity has to import.
 
 Which is the whole reason UPM is the right submission format for this product: `package.json`
 declares glTFast and Newtonsoft JSON, and Package Manager installs them for the buyer. A
