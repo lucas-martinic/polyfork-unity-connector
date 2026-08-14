@@ -166,7 +166,7 @@ namespace Polyfork.EditorTools
 
                 result.Success = true;
                 result.AssetPath = assetPath;
-                result.PrefabPath = SavePrefab(assetPath, asset, geometry);
+                result.PrefabPath = await SavePrefab(assetPath, asset, geometry);
                 return result;
             }
             catch (OperationCanceledException)
@@ -204,7 +204,7 @@ namespace Polyfork.EditorTools
         ///
         /// Best effort: a failure here costs the Inspector knobs, not the import.
         /// </summary>
-        static string SavePrefab(
+        static async Task<string> SavePrefab(
             string glbPath, PolyforkAsset asset, PolyforkKnobValues values)
         {
             GameObject instance = null;
@@ -222,6 +222,14 @@ namespace Polyfork.EditorTools
                 link.title = asset.Title;
                 link.page = asset.Page;
                 link.knobValues = values?.ToString() ?? "{}";
+
+                /* A rigged model arrives idling.
+                 *
+                 * Standing perfectly still is what a character with no clips does, and it
+                 * reads as broken rather than as "no animation was shipped". The clips are
+                 * bound to THIS skeleton here, while the hierarchy is in hand. */
+                await PolyforkAnimationPack.SetUpAsync(
+                    instance, asset.Id, Path.GetDirectoryName(glbPath)?.Replace('\\', '/') ?? DefaultFolder);
 
                 var prefabPath = Path.ChangeExtension(glbPath, ".prefab");
                 prefabPath = AssetDatabase.GenerateUniqueAssetPath(prefabPath);
@@ -297,7 +305,7 @@ namespace Polyfork.EditorTools
                     Success = true,
                     AssetPath = assetPath,
                     ColorsBaked = true,
-                    PrefabPath = SavePrefab(assetPath, asset, values)
+                    PrefabPath = await SavePrefab(assetPath, asset, values)
                 };
             }
             catch (OperationCanceledException)

@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityEngine.Animations;
 using UnityEngine.Playables;
 
-namespace Polyfork.Samples
+namespace Polyfork
 {
     /// <summary>
     /// Plays one of a set of clips on a Polyfork character, chosen from a dropdown.
@@ -14,22 +14,23 @@ namespace Polyfork.Samples
     /// Neck, Head, LeftArm - so any humanoid clip retargets onto them, and shipping one
     /// opinionated walk with every character would be the store deciding how your game moves.
     ///
-    /// The clips come from a pack rather than the character. polyfork.dev publishes two:
+    /// The clips come from a shared pack rather than the character, and importing a rigged
+    /// asset installs them and binds them to its skeleton, so a character arrives idling
+    /// with nothing to set up.
     ///
-    ///   https://polyfork.dev/anim/xbot.glb      idle, walk, run, agree, headShake, poses
-    ///   https://polyfork.dev/anim/soldier.glb   Idle, Walk, Run, TPose
-    ///
-    /// Both use `mixamorig:` bone names while the characters do not, so the paths do not
-    /// line up and a clip cannot bind directly. Set BOTH the character and the pack to
-    /// Rig > Animation Type > Humanoid on import and Unity retargets through the avatar,
-    /// which is what makes any clip work on any of these characters regardless of naming.
+    /// They cannot be retargeted the usual way. A Humanoid avatar is Unity's answer to
+    /// "play this Mixamo clip on that rig", and glTFast has no Humanoid import - its
+    /// maintainers say those importer settings "would basically have to be rewritten". So
+    /// the curves are re-pointed at the character's own bone paths instead, which works
+    /// because the two skeletons are the same skeleton: the packs use Mixamo's names with
+    /// the `mixamorig:` prefix and the characters use them without.
     ///
     /// Played through a PlayableGraph rather than an AnimatorController: a sample should not
     /// require you to author a controller asset, wire states and add parameters before it
     /// does anything, and a graph plays an arbitrary clip in three lines.
     /// </summary>
     [RequireComponent(typeof(Animator))]
-    [AddComponentMenu("Polyfork/Samples/Polyfork Character Animation")]
+    [AddComponentMenu("Polyfork/Polyfork Character Animation")]
     public sealed class PolyforkCharacterAnimation : MonoBehaviour
     {
         [Tooltip("Clips to choose from. Drag them out of an imported animation pack.")]

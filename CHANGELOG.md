@@ -9,19 +9,33 @@ package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- **Character Animation sample.** A `PolyforkCharacterAnimation` component with a dropdown
-  of clips on the Inspector, starting on idle, blending between them, and switchable from
-  script with `Play("walk")`.
+- **Rigged assets arrive animated.** Importing a character now gives it an `Animator`, a
+  `PolyforkCharacterAnimation` component and a set of clips bound to its own skeleton, with
+  **idle playing by default** and a dropdown in the Inspector to try the others. No sample to
+  import and nothing to configure.
 
-  Idle is found **by name**, not by index: the two packs polyfork.dev publishes disagree on
-  capitalisation (`idle` in xbot, `Idle` in soldier) and on ordering, so anything positional
-  would start a different animation depending on which pack was dragged in.
+  The clips are fetched once per project into `Assets/Polyfork/Animations`, rather than
+  shipped in the package: 2.8 MB of Mixamo clips is a lot to put in every consumer's project,
+  most of which import no characters.
 
-  It plays through a `PlayableGraph` rather than an `AnimatorController`, because a sample
-  should not require authoring a controller asset and wiring states before anything moves.
-  The README is explicit about the one setup step that fails silently: **both** the character
-  and the clip pack must be imported as Humanoid rigs, since the packs use `mixamorig:` bone
-  names and the characters do not, so only avatar retargeting can bind them.
+  **They are bound, not retargeted, because they cannot be retargeted.** A Humanoid avatar is
+  Unity's mechanism for playing a Mixamo clip on another rig, and glTFast has no Humanoid
+  import — its maintainers say those importer settings *"would basically have to be
+  rewritten"*. Binding works instead because the two skeletons are the same one: the packs use
+  Mixamo's names with the `mixamorig:` prefix and the characters use them without, so each
+  curve is re-pointed at the bone the character has. Verified against the live catalogue
+  before building it: all 22 of `naval-officer`'s bones are driven by xbot's idle clip, none
+  is missing, and the 45 leftover curves are fingers, eyes and toes.
+
+  Idle is chosen by name, not index — the packs disagree on capitalisation and ordering, so
+  anything positional starts a different animation depending on which pack was used.
+
+
+
+### Added
+
+- It plays through a `PlayableGraph` rather than an `AnimatorController`, so nothing has to
+  author a controller asset and wire states before a character moves.
 
 ## [0.9.0] - 2026-08-14
 

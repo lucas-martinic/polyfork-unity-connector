@@ -1,7 +1,7 @@
 using UnityEditor;
 using UnityEngine;
 
-namespace Polyfork.Samples.EditorTools
+namespace Polyfork.EditorTools
 {
     /// <summary>
     /// Draws the clip list as a dropdown of names, and switches clip as you pick.
@@ -28,16 +28,10 @@ namespace Polyfork.Samples.EditorTools
             if (anim.clips == null || anim.clips.Length == 0)
             {
                 EditorGUILayout.HelpBox(
-                    "No clips yet.\n\n" +
-                    "Polyfork characters ship a rig and no animation, so the clips come from a " +
-                    "pack: download polyfork.dev/anim/xbot.glb, drop it in Assets, and set its " +
-                    "Rig to Humanoid — and the character's Rig to Humanoid too, or the clips " +
-                    "cannot retarget onto it. Then drag the clips into the list above.",
+                    "No clips on this component.\n\n" +
+                    "Characters imported through Polyfork get them automatically, bound to " +
+                    "their own skeleton. On anything else, drag clips into the list above.",
                     MessageType.Info);
-
-                if (GUILayout.Button("Download animation pack (xbot.glb)"))
-                    Application.OpenURL("https://polyfork.dev/anim/xbot.glb");
-
                 return;
             }
 

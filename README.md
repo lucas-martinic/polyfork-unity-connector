@@ -309,13 +309,23 @@ catalogue publishes the handles: `rigged_parts` gives each part an axis and a ra
 `LeftArm` rotating on `z` from 0 to -55 degrees. Nothing is missing when a character imports
 without clips — there were none.
 
-The skeleton is Mixamo's with the prefix stripped (`Hips`, `Spine1`, `LeftArm`), so any
-humanoid clip retargets onto it. polyfork.dev publishes two packs to start from,
-[`/anim/xbot.glb`](https://polyfork.dev/anim/xbot.glb) and
-[`/anim/soldier.glb`](https://polyfork.dev/anim/soldier.glb), and the **Character Animation**
-sample wires one up: a dropdown of clips on the character, starting on idle. Set both the
-character and the pack to a **Humanoid** rig — the packs use `mixamorig:` names and the
-characters do not, so retargeting through the avatar is what makes them line up.
+**So the connector supplies them.** Import a rigged asset and it arrives with an `Animator`,
+a `PolyforkCharacterAnimation` component, a set of clips bound to its own skeleton, and
+**idle playing by default**. The Inspector shows a dropdown to try the others; from script it
+is `anim.Play("walk")`.
+
+The clips come from a pack polyfork.dev publishes, fetched once per project into
+`Assets/Polyfork/Animations` rather than shipped in the package — 2.8 MB of Mixamo clips is a
+lot to put in every project, most of which import no characters at all.
+
+They are bound rather than retargeted, because they cannot be retargeted. A Humanoid avatar
+is Unity's answer to playing a Mixamo clip on another rig, and **glTFast has no Humanoid
+import** — its maintainers say those importer settings *"would basically have to be
+rewritten"*. What makes binding work instead is that the two skeletons are the same skeleton:
+the packs use Mixamo's names with the `mixamorig:` prefix and the characters use them without,
+so each curve is simply re-pointed at the bone this character actually has. Measured on the
+live catalogue, every one of `naval-officer`'s 22 bones is driven by the idle clip and none is
+missing; the 45 leftover curves are fingers, eyes and toes a reduced rig does not have.
 
 ## Exporting to FBX
 
@@ -344,7 +354,6 @@ Import from the package page in **Window ▸ Package Manager**.
 | Sample | What it does |
 | --- | --- |
 | **Runtime API** | Spawns an asset at play time and drives a knob from script |
-| **Character Animation** | A dropdown of animations on a rigged character, starting on idle |
 
 ## Licence
 

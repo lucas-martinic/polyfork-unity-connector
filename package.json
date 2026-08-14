@@ -30,11 +30,6 @@
       "displayName": "Runtime API",
       "description": "Loads the catalogue at play time, spawns an asset and drives a knob from script. Start here if you want Polyfork assets in a running game rather than imported into the project.",
       "path": "Samples~/RuntimeApi"
-    },
-    {
-      "displayName": "Character Animation",
-      "description": "A dropdown of animations on a rigged character, starting on idle. Polyfork characters ship a Mixamo-compatible rig and no clips, so this shows how to retarget a clip pack onto one through a Humanoid avatar.",
-      "path": "Samples~/CharacterAnimation"
     }
   ]
 }
