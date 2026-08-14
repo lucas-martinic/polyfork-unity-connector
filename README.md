@@ -271,7 +271,7 @@ if (remixable.IsMorphable("width")) {
 
 Importing writes two files: the `.glb`, and a **prefab beside it carrying a
 `PolyforkAssetLink`**. Drag the prefab in and the Inspector keeps the asset's knobs — move a
-slider, press **Rebuild**, and the model changes in place.
+slider and the model changes in place as you go.
 
 Rebuilding replaces the meshes on the object, so its transform, its children, its colliders
 and anything else you attached survive the change. The knob values are stored on the

@@ -102,6 +102,7 @@ namespace Polyfork.EditorTools
                 else
                 {
                     staging = await loader.InstantiateAsync(bytes, url, null, ct);
+                    staging.hideFlags = HideFlags.HideAndDontSave;   // see the note in ImportFromBakerAsync
                     var slots = PolyforkColorSlots.Build(staging, schema);
 
                     if (!slots.HasSlots)
@@ -189,6 +190,7 @@ namespace Polyfork.EditorTools
 
                 instance = UnityEngine.Object.Instantiate(model);
                 instance.name = model.name;
+                instance.hideFlags = HideFlags.HideInHierarchy;   // never blink in the Hierarchy
 
                 var link = instance.AddComponent<PolyforkAssetLink>();
                 link.assetId = asset.Id;
@@ -233,6 +235,12 @@ namespace Polyfork.EditorTools
             {
                 staging = await baker.BakeAsync(new PolyforkBakeRequest(asset, schema, values), ct);
                 if (staging == null) return null;
+
+                /* Hidden immediately. A bake builds a real GameObject in the open scene, and
+                 * it is only destroyed after the export finishes awaiting - so for a frame or
+                 * two the model appeared in the user's scene and then vanished, which looks
+                 * like the import went wrong at the exact moment it went right. */
+                staging.hideFlags = HideFlags.HideAndDontSave;
 
                 Directory.CreateDirectory(folder);
                 var fileName = BuildFileName(asset, StripDefaults(schema, values), null, schema);

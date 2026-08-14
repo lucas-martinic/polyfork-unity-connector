@@ -5,6 +5,23 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2026-08-14
+
+### Fixed
+
+- **The model flashed into the scene during an import.** Exporting needs a real GameObject to
+  export, a bake builds one in the open scene, and it was only destroyed after the export
+  finished awaiting — so for a frame or two the model appeared in your scene and vanished,
+  which looks like the import failed at the exact moment it succeeded. Staging objects are
+  hidden the instant they exist now.
+
+### Changed
+
+- **The Inspector rebuilds on change; the Rebuild button is gone.** It only ever existed
+  because nothing was watching for the change — it asked you to request a result you had
+  already described. Slider drags are coalesced, and the wait is skipped entirely when the
+  bake is local, since there is nothing to be gentle with.
+
 ## [0.8.0] - 2026-08-14
 
 ### Added

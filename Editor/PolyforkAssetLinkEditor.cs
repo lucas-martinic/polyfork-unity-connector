@@ -38,9 +38,13 @@ namespace Polyfork.EditorTools
         bool _dirty;
         bool _rebuilding;
 
+        /// <summary>When the pending change should be built, or -1 for nothing pending.</summary>
+        double _rebuildAt = -1d;
+
         void OnEnable()
         {
             _cts = new CancellationTokenSource();
+            EditorApplication.update += Tick;
             _client = new PolyforkClient { ApiKey = PolyforkCredentials.Resolve(null) };
             _loader = new PolyforkGlbLoader(_client);
 
@@ -57,6 +61,7 @@ namespace Polyfork.EditorTools
 
         void OnDisable()
         {
+            EditorApplication.update -= Tick;
             _cts?.Cancel();
             _cts?.Dispose();
             _cts = null;
@@ -161,14 +166,14 @@ namespace Polyfork.EditorTools
                                 Mathf.RoundToInt(knob.Min), Mathf.RoundToInt(knob.Max))
                             : EditorGUILayout.Slider(label, current, knob.Min, knob.Max);
 
-                        if (EditorGUI.EndChangeCheck()) Set(knob, () => _values.SetNumber(knob.Name, next));
+                        if (EditorGUI.EndChangeCheck()) Schedule(() => _values.SetNumber(knob.Name, next));
                         continue;
                     }
 
                     case PolyforkKnobType.Toggle:
                     {
                         var next = EditorGUILayout.Toggle(label, _values.GetBool(knob.Name, knob.DefaultBool));
-                        if (EditorGUI.EndChangeCheck()) Set(knob, () => _values.SetBool(knob.Name, next));
+                        if (EditorGUI.EndChangeCheck()) Schedule(() => _values.SetBool(knob.Name, next));
                         continue;
                     }
 
@@ -179,7 +184,7 @@ namespace Polyfork.EditorTools
                         var next = EditorGUILayout.Popup(label, index,
                             options.Select(o => new GUIContent(o)).ToArray());
 
-                        if (EditorGUI.EndChangeCheck()) Set(knob, () => _values.SetChoice(knob.Name, options[next]));
+                        if (EditorGUI.EndChangeCheck()) Schedule(() => _values.SetChoice(knob.Name, options[next]));
                         continue;
                     }
 
@@ -190,7 +195,7 @@ namespace Polyfork.EditorTools
                         if (current == default) current = authored;
 
                         var next = EditorGUILayout.ColorField(label, current);
-                        if (EditorGUI.EndChangeCheck()) Set(knob, () => _values.SetColor(knob.Name, next));
+                        if (EditorGUI.EndChangeCheck()) Schedule(() => _values.SetColor(knob.Name, next));
                         continue;
                     }
                 }
@@ -202,39 +207,59 @@ namespace Polyfork.EditorTools
                 EditorGUILayout.LabelField("This asset has no knobs that can be applied here.", EditorStyles.miniLabel);
         }
 
-        void Set(PolyforkKnob knob, Action apply)
+        void Schedule(Action apply)
         {
             apply();
             _dirty = true;
+
+            /* Debounced only when the rebuild leaves the machine. A local bake is neither
+             * metered nor a request, so waiting buys nothing and costs the immediacy the
+             * whole point of turning a knob in the Inspector is - you want to see it. */
+            var metered = _bakers.Resolve(_asset, _schema)?.ConsumesAllowance ?? true;
+            _rebuildAt = EditorApplication.timeSinceStartup + (metered ? 0.35d : 0d);
+        }
+
+        /// <summary>
+        /// Builds whatever the last change asked for, once it has settled.
+        ///
+        /// A dragged slider fires a change per frame, so this coalesces them: the button it
+        /// replaces made you ask for a result you had already described, which is a step that
+        /// only ever existed because nothing was watching for the change.
+        /// </summary>
+        void Tick()
+        {
+            if (_rebuildAt < 0d || _rebuilding) return;
+            if (EditorApplication.timeSinceStartup < _rebuildAt) return;
+
+            _rebuildAt = -1d;
+
+            if (target is PolyforkAssetLink link) _ = RebuildAsync(link);
         }
 
         void DrawActions(PolyforkAssetLink link)
         {
-            if (_dirty)
-            {
-                EditorGUILayout.HelpBox(
-                    "Changed. Rebuilding replaces the meshes on this object; its transform, " +
-                    "children and any components you added stay as they are.",
-                    MessageType.None);
-            }
-
             using (new EditorGUILayout.HorizontalScope())
             {
-                using (new EditorGUI.DisabledScope(!_dirty || _rebuilding))
-                {
-                    if (GUILayout.Button(_rebuilding ? "Rebuilding..." : "Rebuild", GUILayout.Height(26f)))
-                        _ = RebuildAsync(link);
-                }
+                GUILayout.Label(
+                    _rebuilding ? "Rebuilding..." : _dirty ? "Building..." : " ",
+                    EditorStyles.miniLabel);
 
-                using (new EditorGUI.DisabledScope(_rebuilding))
+                GUILayout.FlexibleSpace();
+
+                using (new EditorGUI.DisabledScope(_rebuilding || link.IsDefault && !_dirty))
                 {
-                    if (GUILayout.Button("Reset to published", GUILayout.Height(26f), GUILayout.Width(150f)))
+                    if (GUILayout.Button("Reset to published", EditorStyles.miniButton, GUILayout.Width(140f)))
                     {
                         _values = new PolyforkKnobValues();
-                        _dirty = true;
+                        Schedule(() => { });
                     }
                 }
             }
+
+            EditorGUILayout.LabelField(
+                "Changes rebuild the meshes on this object. Its transform, children and any " +
+                "components you added stay as they are.",
+                EditorStyles.wordWrappedMiniLabel);
         }
 
         /// <summary>
