@@ -49,7 +49,7 @@ Or by hand, which also lets you pin a version with `#v0.2.0`:
 
 ```jsonc
 // Packages/manifest.json
-"com.polyfork.connector": "https://github.com/lucas-martinic/polyfork-unity-connector.git",
+"dev.polyfork.connector": "https://github.com/lucas-martinic/polyfork-unity-connector.git",
 "com.unity.cloud.gltfast": "6.19.0",
 "com.unity.nuget.newtonsoft-json": "3.2.2"
 ```
@@ -57,6 +57,13 @@ Or by hand, which also lets you pin a version with `#v0.2.0`:
 Unity 6000.0 or newer. The two dependencies are resolved from Unity's own registry.
 
 ## Updating
+
+> **Installed before 0.13.0?** The package id changed from `com.polyfork.connector` to
+> **`dev.polyfork.connector`**, to match the namespace the Asset Store derives from the verified
+> `polyfork.dev` domain. Unity keys a manifest entry by the package's own name, so an entry under
+> the old id cannot resolve the new package and **Update Package cannot carry you across**.
+> Remove the package in Package Manager and add the git URL again. Nothing else changes: the
+> assemblies, namespaces and asset GUIDs are all untouched, so scenes and prefabs keep working.
 
 A package installed from a git URL does not update on its own. **Polyfork ▸ Update Package**
 checks the published version, tells you if you are already on it, and pulls the newest one if

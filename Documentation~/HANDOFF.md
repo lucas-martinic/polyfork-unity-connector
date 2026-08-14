@@ -3,7 +3,7 @@
 Written 2026-08-04, to continue this work on the VPS where the Polyfork project lives.
 Updated 2026-08-13: verified against the live API, published, and split into this repo.
 
-The deliverable is a Unity package, `com.polyfork.connector`, that puts the polyfork.dev
+The deliverable is a Unity package, `dev.polyfork.connector`, that puts the polyfork.dev
 store inside the Unity editor.
 
 ---
@@ -200,7 +200,7 @@ Unity.exe -batchmode -nographics -projectPath <host-project> \
 ```
 
 A package's tests only run if the project opts in: add
-`"testables": ["com.polyfork.connector"]` to that `manifest.json`, or the Test Runner will
+`"testables": ["dev.polyfork.connector"]` to that `manifest.json`, or the Test Runner will
 show nothing and report no error. `UNITY_INCLUDES_TESTS` in `defineConstraints` fails the
 same silent way.
 

@@ -224,7 +224,7 @@ and the two `dependencies`.
 
 1. Enrol at [cloud.unity.com/assetstore/publisher](https://cloud.unity.com/assetstore/publisher).
    Verification wants a legal name, country and government ID, and a live selfie through Persona.
-2. Create a product draft and **reserve the technical name `com.polyfork.connector`** — the
+2. Create a product draft and **reserve the technical name `dev.polyfork.connector`** — the
    uploader rejects a package whose `name` does not match it.
 3. **Window ▸ Tools ▸ Asset Store ▸ Validator**, set **Validation Type: UPM**, run it.
 4. **Window ▸ Tools ▸ Asset Store ▸ Uploader ▸ UPM Packages**, upload.
@@ -298,10 +298,10 @@ than photographing the whole editor. Avoid Unity's default skybox in any scene s
 
 Left to do, in order:
 
-- [ ] **Reserve the technical name `com.polyfork.connector`** in the product draft. The uploader
+- [ ] **Reserve the technical name `dev.polyfork.connector`** in the product draft. The uploader
       rejects a package whose `name` does not match it, and the name cannot be changed after.
 - [ ] Unzip `Polyfork-UPM.zip` into a fresh Unity 6000.0 project's `Packages/`, so the manifest
-      lands at `Packages/com.polyfork.connector/package.json`. Package Manager resolves glTFast
+      lands at `Packages/dev.polyfork.connector/package.json`. Package Manager resolves glTFast
       and Newtonsoft on its own, which is the entire reason for submitting this way.
 - [ ] Compile with **no errors and no warnings**
 - [ ] Every feature exercised once: browse, remix, import, place, re-edit, animate
