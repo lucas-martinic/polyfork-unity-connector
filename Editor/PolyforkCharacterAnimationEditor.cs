@@ -20,7 +20,6 @@ namespace Polyfork.EditorTools
             serializedObject.Update();
             EditorGUILayout.PropertyField(serializedObject.FindProperty("clips"), true);
             EditorGUILayout.PropertyField(serializedObject.FindProperty("blend"));
-            EditorGUILayout.PropertyField(serializedObject.FindProperty("loop"));
             serializedObject.ApplyModifiedProperties();
 
             EditorGUILayout.Space(6f);

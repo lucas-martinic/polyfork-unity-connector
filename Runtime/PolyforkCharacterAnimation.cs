@@ -49,8 +49,6 @@ namespace Polyfork
         [Tooltip("Seconds to blend when the selection changes. Zero cuts.")]
         [Range(0f, 1f)] public float blend = 0.25f;
 
-        public bool loop = true;
-
         Animator _animator;
         PlayableGraph _graph;
         AnimationMixerPlayable _mixer;
@@ -130,17 +128,35 @@ namespace Polyfork
 
             if (!_graph.IsValid()) Build();
 
-            // Slot 0 keeps what is leaving, slot 1 takes what is arriving, and the weight
-            // walks from one to the other.
-            var outgoing = _mixer.GetInput(1);
-            _mixer.DisconnectInput(0);
-            if (outgoing.IsValid()) _mixer.ConnectInput(0, outgoing, 0);
+            /* Slot 0 holds what is leaving, slot 1 what is arriving, and the weight walks
+             * from one to the other.
+             *
+             * BOTH inputs come off before either goes back on. Moving the outgoing playable
+             * to slot 0 while it was still attached to slot 1 asked the graph to give one
+             * output two owners:
+             *
+             *   Cannot connect output 0, it is already connected
+             *
+             * A playable's output is singular, so freeing it has to happen first. */
+            var leaving = _mixer.GetInput(1);
+            var stale = _mixer.GetInput(0);
 
+            _mixer.DisconnectInput(0);
             _mixer.DisconnectInput(1);
+
+            // The clip from two switches ago is nobody's now; graphs do not collect them.
+            if (stale.IsValid()) _graph.Destroy(stale);
+
+            if (leaving.IsValid()) _mixer.ConnectInput(0, leaving, 0);
 
             var playable = AnimationClipPlayable.Create(_graph, clip);
             playable.SetApplyFootIK(true);
-            if (!loop) playable.SetDuration(clip.length);
+
+            /* The clip decides, not this component. The pack ships cycles and it ships
+             * poses - sad_pose and sneak_pose animate INTO a pose from rest - and looping a
+             * pose snaps it back to rest over and over, which is what "looks broken" was.
+             * The retarget marks them, and this honours the mark. */
+            if (!clip.isLooping) playable.SetDuration(clip.length);
 
             _mixer.ConnectInput(1, playable, 0);
 

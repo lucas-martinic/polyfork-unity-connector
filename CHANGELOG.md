@@ -5,6 +5,26 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.3] - 2026-08-14
+
+### Fixed
+
+- **`Cannot connect output 0, it is already connected`** when switching animation. The
+  outgoing playable was being attached to mixer slot 0 while still attached to slot 1 — a
+  playable's output is singular, so it has to be freed first. Both inputs now come off before
+  either goes back on, and the clip from two switches ago is destroyed rather than left in
+  the graph.
+- **Poses no longer loop.** The pack ships cycles *and* poses, and `sad_pose` / `sneak_pose`
+  animate **into** a pose from rest — so looping one snapped the character back to rest and
+  started again, forever. The retarget marks poses as non-looping and playback honours the
+  mark. Cycles still loop.
+
+### Changed
+
+- Dropped the component's `loop` field. Whether a clip loops is a fact about the clip, not a
+  setting on the thing playing it, and one switch for a list containing both cycles and poses
+  is wrong for half of them whichever way it is set.
+
 ## [0.11.2] - 2026-08-14
 
 ### Fixed

@@ -77,10 +77,14 @@ namespace Polyfork.EditorTools
                 return null;
             }
 
-            /* Loop it. These are locomotion and idle cycles, and a clip that plays once and
-             * freezes reads as a broken character rather than a clip that ended. */
+            /* Cycles loop, poses do not.
+             *
+             * The pack ships both, and the difference matters: idle, walk and run are cycles
+             * that read as broken if they play once and freeze, while sad_pose and sneak_pose
+             * animate INTO a pose from rest, so looping one snaps the character back to rest
+             * and starts over, forever. Marked here and honoured at play time. */
             var settings = AnimationUtility.GetAnimationClipSettings(source);
-            settings.loopTime = true;
+            settings.loopTime = !IsPose(source);
             AnimationUtility.SetAnimationClipSettings(clip, settings);
 
             /* Four curves per bone once quaternions are split into components, so a rig of
@@ -94,6 +98,15 @@ namespace Polyfork.EditorTools
 
             return clip;
         }
+
+        /// <summary>
+        /// A one-off pose rather than a cycle.
+        ///
+        /// By name, because that is what the pack encodes it in, plus a length guard for a
+        /// clip too short to be a cycle whatever it is called.
+        /// </summary>
+        static bool IsPose(AnimationClip clip) =>
+            clip.name.IndexOf("pose", StringComparison.OrdinalIgnoreCase) >= 0 || clip.length < 0.25f;
 
         /// <summary>
         /// Rotation only. Position and scale curves belong to the skeleton they were authored
