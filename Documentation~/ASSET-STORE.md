@@ -53,22 +53,41 @@ names are Mixamo-compatible, so a CC0 locomotion set drops in without touching a
 The Asset Store Tools validator failed the first submission on two counts:
 
 > *Could not find any valid Demo Scenes in the selected validation paths.*
-> *No potential documentation files ('.txt', '.pdf', '.html', '.rtf', '.md') found within the
-> given path.*
+> *The following files have been found to match the documentation file format, but may not be
+> documentation in content.*
 
-Both now ship, and both only in the store build — a git-URL install has no business getting a
-demo scene and a manual dumped into the consumer's project. They live under `StoreExtras~/`,
-which Unity ignores, and `make-store-package.py` unpacks them to `Demo/` and `Documentation/`.
+**Read the validator before satisfying it.** Its source ships with the tools, and the two rules
+are narrower and dumber than the wording suggests:
+
+- `CheckDemoScenes` collects every `.unity` file under the paths you selected and accepts a
+  scene whose root-object count is **anything other than zero, or exactly an untouched camera
+  plus an untouched light**. Content is never inspected. Three roots passes.
+- `CheckDocumentation` collects every `.txt`, `.pdf`, `.html`, `.rtf` and `.md` under those
+  paths, and accepts one that either ends in **`.pdf`** or has the literal word
+  **"documentation"** somewhere in its text. Nothing else is read. A manual that calls itself a
+  Manual throughout fails — which is exactly what happened, and it reports as a *warning* about
+  files that "may not be documentation in content" rather than as a missing file.
+
+The first fix attempt put both under `StoreExtras~/` and unpacked them only in the store build,
+on the reasoning that a git-URL install has no business getting a demo scene. That cost a second
+review cycle: it made the two artifacts differ in precisely the files validation looks at, so
+whichever one you had open decided the outcome. They are ordinary package folders now.
 
 - **`Demo/Polyfork Demo.unity`** — camera, key light, and an object called
   *START HERE - Polyfork* whose Inspector lists the four steps with a button that opens the
-  gallery. The guidance allows exactly this for an editor extension: *"a demo scene showcasing
-  the asset or showing setup steps in the scene"*. It ships without models deliberately —
-  Polyfork browses a catalogue that lives online, so what belongs in the scene is whatever the
-  user picks; importing one puts it there, which is the demo.
-- **`Documentation/Polyfork-Manual.html`** — twelve numbered sections with a table of contents,
-  covering install, the demo scene, browsing, remixing, importing, re-editing, characters,
-  local rebuilds, keys, scripting and troubleshooting. HTML is on the accepted list.
+  gallery. Three root objects, so it passes. The guidance allows exactly this for an editor
+  extension: *"a demo scene showcasing the asset or showing setup steps in the scene"*. It ships
+  without models deliberately — Polyfork browses a catalogue that lives online, so what belongs
+  in the scene is whatever the user picks; importing one puts it there, which is the demo.
+  `Demo/` carries its own asmdefs, without which its scripts would not compile in a UPM package
+  and the scene's component would be missing.
+- **`Documentation/Polyfork-Manual.pdf`** and **`.html`** — twelve numbered sections with a
+  table of contents, covering install, the demo scene, browsing, remixing, importing,
+  re-editing, characters, local rebuilds, keys, scripting and troubleshooting. The PDF is
+  generated from the HTML (`--headless --print-to-pdf`) and is accepted outright, no text scan.
+
+**When validating, select `Assets/Polyfork` itself**, not a subfolder. Both checks only ever see
+the paths you add, so pointing them at `Runtime/` fails on a package that would otherwise pass.
 
 ### 1c. Free on GitHub — **settled: the package is free**
 
@@ -166,6 +185,16 @@ python3 "Tools~/make-unitypackage.py" Polyfork.unitypackage
 It is attached to each GitHub release, which is the answer to "where do I get the Unity
 package" for anyone who does not want the git URL.
 
+Each release carries **two**, and the difference is only the store's policy strip:
+
+| File | For | Contains |
+| --- | --- | --- |
+| `Polyfork.unitypackage` | everyone | everything, including `Polyfork ▸ Update Package` and the one-button PuerTS installer |
+| `Polyfork-AssetStore.unitypackage` | the submission | the same, minus the two features that add or update packages programmatically |
+
+Both carry `Demo/` and `Documentation/`, so validating either gives the same answer. Upload the
+`-AssetStore` one; the policy strip is the whole reason it exists.
+
 ## 4. Images
 
 Generated into `Documentation~/store/`, at the sizes the store asks for:
@@ -198,7 +227,8 @@ than photographing the whole editor. Avoid Unity's default skybox in any scene s
 
 - [x] **1b settled** — pack kept, package ships free
 - [x] **Price settled** — free
-- [x] **Demo scene and offline documentation** — in the store build
+- [x] **Demo scene and offline documentation** — in every build, validated against the
+      validator's own rules
 - [ ] Publisher account created at [publisher.unity.com](https://publisher.unity.com), profile
       filled in (name, description, logo, contact)
 - [ ] `python3 "Tools~/make-store-package.py"` run, output **clean**

@@ -29,8 +29,11 @@ ROOT = Path(__file__).resolve().parent.parent
 PREFIX = "Assets/Polyfork"
 
 # Everything a consumer needs; nothing that only makes sense as a UPM package.
-# Demo and Documentation exist only in a store build (see make-store-package.py),
-# and are skipped silently when absent.
+#
+# Demo and Documentation are here because Asset Store validation looks for a scene and for
+# offline docs inside the paths you hand it, and finds neither in a folder that does not
+# contain them. They are in the git package too - the two builds must not differ in the
+# files that decide whether a submission passes.
 INCLUDE_DIRS = ["Runtime", "Editor", "Demo", "Documentation"]
 INCLUDE_FILES = ["README.md", "LICENSE.md", "Third Party Notices.md", "CHANGELOG.md"]
 

@@ -5,6 +5,32 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.6] - 2026-08-14
+
+### Fixed
+
+- **`Play()` did not compile.** `PlayableGraph.Destroy()` tears down the whole graph and takes
+  no argument, so passing the stale clip to it was a compile error rather than a wrong thing
+  freed at run time. Destroying one node is `DestroyPlayable`.
+
+- **Asset Store validation still failed on demo scenes and documentation**, because 0.11.5 put
+  both behind `StoreExtras~/` and unpacked them only in the store build. The two artifacts then
+  differed in exactly the files validation looks for, so whichever one you happened to import
+  decided the result. `Demo/` and `Documentation/` are ordinary package folders now, present in
+  the git install and in both `.unitypackage` builds.
+
+  Reading the validator rather than guessing at them a second time also turned up what the
+  documentation check actually wants: any `.txt`, `.pdf`, `.html`, `.rtf` or `.md` file in the
+  paths you select, which either ends in `.pdf` or contains the word "documentation" somewhere
+  in its text. The manual said "Manual" throughout and so failed a check it was written to
+  pass. It now ships as `Polyfork-Manual.pdf` beside the HTML, and a PDF is accepted outright.
+
+  The demo scene needed no change: the check accepts any scene whose root object count is not
+  exactly an untouched camera-and-light pair, and this one has three.
+
+- `Demo/` carries its own assembly definitions. Scripts in a UPM package that sit outside one
+  are not compiled at all, so without them the scene's component would have been missing.
+
 ## [0.11.5] - 2026-08-14
 
 ### Added

@@ -144,8 +144,12 @@ namespace Polyfork
             _mixer.DisconnectInput(0);
             _mixer.DisconnectInput(1);
 
-            // The clip from two switches ago is nobody's now; graphs do not collect them.
-            if (stale.IsValid()) _graph.Destroy(stale);
+            /* The clip from two switches ago is nobody's now; graphs do not collect them.
+             *
+             * DestroyPlayable, not Destroy: PlayableGraph.Destroy() tears down the whole graph
+             * and takes no argument, so passing one is CS1501 rather than a wrong-thing-freed
+             * at run time. Destroying a single node is DestroyPlayable. */
+            if (stale.IsValid()) _graph.DestroyPlayable(stale);
 
             if (leaving.IsValid()) _mixer.ConnectInput(0, leaving, 0);
 
