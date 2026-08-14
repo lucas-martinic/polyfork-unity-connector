@@ -5,6 +5,31 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.3] - 2026-08-14
+
+### Fixed
+
+- **The test assembly tried to compile in consumer projects.** `Polyfork.Connector.Tests`
+  references `UnityEngine.TestRunner`, `UnityEditor.TestRunner` and `nunit.framework.dll`, all of
+  which come from `com.unity.test-framework`. With no define constraint it compiled wherever the
+  package was installed, so a project without Test Framework got unresolved references from a
+  package it never asked to test. It now carries the standard `UNITY_INCLUDE_TESTS` constraint,
+  which Unity sets only for a package listed in the project's `testables` - so the tests still
+  run for us and never compile for a buyer.
+
+  Only ever bit UPM and git installs; `Tests/` was already excluded from the `.unitypackage`.
+
+### Added
+
+- `Tools~/make-upm-zip.py`, which packs a store build as a package folder for the Asset Store's
+  UPM uploader. That uploader takes a package in the project rather than a file, so the artifact
+  to hand over is something that drops into `<project>/Packages/`.
+
+### Changed
+
+- The store build no longer carries `.github` or `.gitignore`. Repo furniture, and a shipped
+  package is not a repo.
+
 ## [0.12.2] - 2026-08-14
 
 ### Added

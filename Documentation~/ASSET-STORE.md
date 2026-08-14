@@ -292,13 +292,27 @@ than photographing the whole editor. Avoid Unity's default skybox in any scene s
 - [x] **Price settled** — free
 - [x] **Demo scene and offline documentation** — in every build, validated against the
       validator's own rules
-- [ ] Publisher account created at [publisher.unity.com](https://publisher.unity.com), profile
-      filled in (name, description, logo, contact)
-- [ ] `python3 "Tools~/make-store-package.py"` run, output **clean**
-- [ ] Store build opened in a fresh Unity 6000.0 project and compiled with no errors or
-      warnings
-- [ ] Every feature exercised once in that project: browse, remix, import, place, re-edit
-- [ ] Four screenshots taken
+- [x] **Publisher profile** created, and **UPM publishing enrolment approved** (2026-08-14)
+- [x] `Third Party Notices.md` current — PuerTS BSD 3-Clause, reproduced verbatim
+- [x] `package.json` submission-ready — every required and recommended field, both dependencies
+
+Left to do, in order:
+
+- [ ] **Reserve the technical name `com.polyfork.connector`** in the product draft. The uploader
+      rejects a package whose `name` does not match it, and the name cannot be changed after.
+- [ ] Unzip `Polyfork-UPM.zip` into a fresh Unity 6000.0 project's `Packages/`, so the manifest
+      lands at `Packages/com.polyfork.connector/package.json`. Package Manager resolves glTFast
+      and Newtonsoft on its own, which is the entire reason for submitting this way.
+- [ ] Compile with **no errors and no warnings**
+- [ ] Every feature exercised once: browse, remix, import, place, re-edit, animate
+- [ ] **Validator**, Validation Type: **UPM**
+- [ ] **Four screenshots** — the one thing here that cannot be prepared off-editor
 - [ ] Description names both Unity Registry dependencies and the internet requirement
-- [ ] `Third Party Notices.md` current
+- [ ] **Uploader ▸ UPM Packages**, upload
+- [ ] Listing filled in from the copy on `/branding`, then submit for approval
 - [ ] Version tagged in git so the submission maps to a commit
+
+Do not upload a `.unitypackage` for this product. It is the same code and a worse purchase:
+that format carries no dependency information, so every buyer installs glTFast and Newtonsoft by
+hand before anything compiles. The `.unitypackage` builds exist for distribution outside the
+store, where there is no manifest to read.

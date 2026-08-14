@@ -51,7 +51,7 @@ FORBIDDEN = [
     (r"packages-lock\.json", "edits the project's package lock"),
 ]
 
-SKIP_DIRS = {".git", "Library", "Temp", "obj"}
+SKIP_DIRS = {".git", ".github", "Library", "Temp", "obj"}
 
 
 def read_lossy(path: Path) -> str:
