@@ -306,9 +306,16 @@ to drop one rather than letting it vanish quietly.
 
 **Characters are rigged, not animated.** They ship a skeleton and named joints, and the
 catalogue publishes the handles: `rigged_parts` gives each part an axis and a range, e.g.
-`LeftArm` rotating on `z` from 0 to -55 degrees. They are built to be posed and driven by your
-own animation, not to arrive playing something. Nothing is missing when a character imports
+`LeftArm` rotating on `z` from 0 to -55 degrees. Nothing is missing when a character imports
 without clips — there were none.
+
+The skeleton is Mixamo's with the prefix stripped (`Hips`, `Spine1`, `LeftArm`), so any
+humanoid clip retargets onto it. polyfork.dev publishes two packs to start from,
+[`/anim/xbot.glb`](https://polyfork.dev/anim/xbot.glb) and
+[`/anim/soldier.glb`](https://polyfork.dev/anim/soldier.glb), and the **Character Animation**
+sample wires one up: a dropdown of clips on the character, starting on idle. Set both the
+character and the pack to a **Humanoid** rig — the packs use `mixamorig:` names and the
+characters do not, so retargeting through the avatar is what makes them line up.
 
 ## Exporting to FBX
 
@@ -337,6 +344,7 @@ Import from the package page in **Window ▸ Package Manager**.
 | Sample | What it does |
 | --- | --- |
 | **Runtime API** | Spawns an asset at play time and drives a knob from script |
+| **Character Animation** | A dropdown of animations on a rigged character, starting on idle |
 
 ## Licence
 

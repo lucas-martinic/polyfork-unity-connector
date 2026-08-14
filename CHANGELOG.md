@@ -5,6 +5,24 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-08-14
+
+### Added
+
+- **Character Animation sample.** A `PolyforkCharacterAnimation` component with a dropdown
+  of clips on the Inspector, starting on idle, blending between them, and switchable from
+  script with `Play("walk")`.
+
+  Idle is found **by name**, not by index: the two packs polyfork.dev publishes disagree on
+  capitalisation (`idle` in xbot, `Idle` in soldier) and on ordering, so anything positional
+  would start a different animation depending on which pack was dragged in.
+
+  It plays through a `PlayableGraph` rather than an `AnimatorController`, because a sample
+  should not require authoring a controller asset and wiring states before anything moves.
+  The README is explicit about the one setup step that fails silently: **both** the character
+  and the clip pack must be imported as Humanoid rigs, since the packs use `mixamorig:` bone
+  names and the characters do not, so only avatar retargeting can bind them.
+
 ## [0.9.0] - 2026-08-14
 
 ### Fixed
