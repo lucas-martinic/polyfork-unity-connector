@@ -224,7 +224,7 @@ and the two `dependencies`.
 
 1. Enrol at [cloud.unity.com/assetstore/publisher](https://cloud.unity.com/assetstore/publisher).
    Verification wants a legal name, country and government ID, and a live selfie through Persona.
-2. Create a product draft and **reserve the technical name `dev.polyfork.connector`** — the
+2. Create a product draft and **reserve the technical name `dev.polyfork.unity-connector`** — the
    uploader rejects a package whose `name` does not match it.
 3. **Window ▸ Tools ▸ Asset Store ▸ Validator**, set **Validation Type: UPM**, run it.
 4. **Window ▸ Tools ▸ Asset Store ▸ Uploader ▸ UPM Packages**, upload.
@@ -298,20 +298,18 @@ than photographing the whole editor. Avoid Unity's default skybox in any scene s
 
 Left to do, in order:
 
-- [ ] **Reserve the technical name `dev.polyfork.connector`** in the product draft. The uploader
+- [ ] **Reserve the technical name `dev.polyfork.unity-connector`** in the product draft. The uploader
       rejects a package whose `name` does not match it, and the name cannot be changed after.
 
-      Not `dev.polyfork.unity`, nor `unity-connector` or `unity-integration`. The portal
-      answers *"This namespace is already in use by another product"*, which is impossible
-      under a publisher-scoped namespace and is really a trademark rejection: **5.1.b** lets
-      Unity reject namespaces *"that may imply affiliation with other entities"*, and
-      **2.5.a** bars namespaces that *"include Unity or any other trademarks"*. The `unity`
-      is still inside the claimed namespace in all three.
+      The bare segment `dev.polyfork.unity` is refused with *"This namespace is already in
+      use by another product"* — impossible under a publisher-scoped namespace, so it is a
+      reserved word wearing a collision's clothes. **`unity-connector` is accepted**, so the
+      reservation is on the exact segment rather than on any segment containing the word.
 
-      The listing name stays **Polyfork for Unity**. "X for Y" in a title is a compatibility
-      statement, which is the accepted form, and is not a claimed namespace.
+      The listing name is **Polyfork for Unity** either way. "X for Y" in a title is a
+      compatibility statement, which is the accepted form, and is not a claimed namespace.
 - [ ] Unzip `Polyfork-UPM.zip` into a fresh Unity 6000.0 project's `Packages/`, so the manifest
-      lands at `Packages/dev.polyfork.connector/package.json`. Package Manager resolves glTFast
+      lands at `Packages/dev.polyfork.unity-connector/package.json`. Package Manager resolves glTFast
       and Newtonsoft on its own, which is the entire reason for submitting this way.
 - [ ] Compile with **no errors and no warnings**
 - [ ] Every feature exercised once: browse, remix, import, place, re-edit, animate

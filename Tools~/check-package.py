@@ -4,7 +4,7 @@
 Unity pairs every asset with a .meta file. In a package installed from a git URL the
 folder is immutable, so Unity cannot write a missing one itself: it prints
 
-    Asset Packages/dev.polyfork.connector/<path> has no meta file, but it's in an
+    Asset Packages/dev.polyfork.unity-connector/<path> has no meta file, but it's in an
     immutable folder. The asset will be ignored.
 
 and skips the asset. "Ignored" is the dangerous part - a missing .meta on a script or an

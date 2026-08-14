@@ -7,7 +7,7 @@ namespace Polyfork.EditorTools
     /// Where this package's own files live, in whichever layout it was installed as.
     ///
     /// There are two, and code that assumes one is broken in the other. Installed from the git
-    /// URL or the registry, the package is at <c>Packages/dev.polyfork.connector</c>. Imported
+    /// URL or the registry, the package is at <c>Packages/dev.polyfork.unity-connector</c>. Imported
     /// from a <c>.unitypackage</c> - which is how the Asset Store delivers it - there is no
     /// package at all: the files land under <c>Assets/Polyfork</c>, and the folder the user
     /// chose is not fixed, because they can move it.
@@ -18,7 +18,7 @@ namespace Polyfork.EditorTools
     /// </summary>
     public static class PolyforkPackagePath
     {
-        const string UpmRoot = "Packages/dev.polyfork.connector";
+        const string UpmRoot = "Packages/dev.polyfork.unity-connector";
         const string Anchor = "/Editor/PolyforkPackagePath.cs";
 
         static string _root;

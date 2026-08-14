@@ -5,6 +5,28 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2026-08-14
+
+### Changed
+
+- **The package id is now `dev.polyfork.unity-connector`**, was `dev.polyfork.connector`, to
+  match the product namespace actually claimed in the Publisher Portal.
+
+  The bare segment `dev.polyfork.unity` is refused with *"This namespace is already in use by
+  another product"* — impossible under a publisher-scoped namespace, so it is a reserved word
+  rather than a collision. **`dev.polyfork.unity-connector` is accepted.** So the reservation
+  is on the exact segment, not on any segment containing the word, which is the narrower and
+  correct reading of rules 5.1.b and 2.5.a.
+
+### Upgrading
+
+- **Remove the package and add the git URL again**, from `com.polyfork.connector` (0.12.x and
+  earlier) or `dev.polyfork.connector` (0.13.0). Unity keys a manifest entry by the package's
+  own name, so neither resolves this one and `Polyfork ▸ Update Package` cannot cross a rename.
+
+  Assembly names, C# namespaces and every asset GUID are untouched, so scenes, prefabs and
+  script references survive it. The repository keeps its name, so the git URL is unchanged.
+
 ## [0.13.0] - 2026-08-14
 
 ### Changed
@@ -16,14 +38,7 @@ package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `name` does not match the reserved technical name. `com.polyfork.*` was always a small lie
   anyway: it claims a domain we do not own.
 
-- **Not `dev.polyfork.unity`.** That was tried and the portal answered *"This namespace is
-  already in use by another product"*, which under a publisher-scoped namespace should have
-  been impossible. It is a trademark rejection wearing a collision's clothes: **5.1.b** lets
-  Unity *"reject enrollments that attempt to claim namespaces that may imply affiliation with
-  other entities"*, and **2.5.a** bars namespaces that *"include Unity or any other
-  trademarks"*. `unity-connector` and `unity-integration` fail the same test, since the
-  trademark is still inside the namespace being claimed. The listing name stays **Polyfork for
-  Unity**: "X for Y" is a compatibility statement in a title, not a claimed namespace.
+- Not `dev.polyfork.unity`: the portal rejects the bare `unity` segment.
 
   Renaming everywhere rather than only in the store build, because a store build that differs
   from the normal one in something load-bearing has already cost this project two review cycles.

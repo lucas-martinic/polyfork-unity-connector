@@ -14,7 +14,7 @@ namespace Polyfork.EditorTools
     /// AssetDatabase rather than Resources because a package path is a real asset path, and
     /// this is the one place that knows where the package keeps them.
     ///
-    /// The root used to be hardcoded to <c>Packages/dev.polyfork.connector</c>, which exists
+    /// The root used to be hardcoded to <c>Packages/dev.polyfork.unity-connector</c>, which exists
     /// only for a UPM install. Imported from a <c>.unitypackage</c> - the Asset Store's own
     /// delivery - there is no package by that name and the read returned null, so local baking
     /// silently fell back to the server for exactly the users the store sends.

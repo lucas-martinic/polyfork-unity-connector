@@ -26,7 +26,7 @@ namespace Polyfork.EditorTools
     /// </summary>
     static class PolyforkUpdate
     {
-        const string PackageName = "dev.polyfork.connector";
+        const string PackageName = "dev.polyfork.unity-connector";
         const string GitUrl = "https://github.com/lucas-martinic/polyfork-unity-connector.git";
         const string ManifestUrl =
             "https://raw.githubusercontent.com/lucas-martinic/polyfork-unity-connector/main/package.json";
