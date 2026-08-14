@@ -5,6 +5,15 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.2] - 2026-08-14
+
+### Fixed
+
+- **0.11.1 did not compile.** `CS0104: 'Object' is an ambiguous reference` — 0.11.1 added
+  `using System;` to `PolyforkClipRetarget` for `StringComparison`, which put `System.Object`
+  in scope alongside `UnityEngine.Object` and made the one bare `Object.DestroyImmediate`
+  ambiguous. Qualified.
+
 ## [0.11.1] - 2026-08-14
 
 ### Fixed

@@ -71,7 +71,9 @@ namespace Polyfork.EditorTools
 
             if (bound == 0)
             {
-                Object.DestroyImmediate(clip);
+                // Qualified: `using System;` puts System.Object in scope, so a bare Object
+                // is ambiguous. CS0104, and the one place in this file that says it.
+                UnityEngine.Object.DestroyImmediate(clip);
                 return null;
             }
 
