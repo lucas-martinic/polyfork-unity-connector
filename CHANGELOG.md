@@ -5,6 +5,21 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.1] - 2026-08-14
+
+### Fixed
+
+- **Characters came apart in play mode.** The rebound clips carried every curve the source
+  had, including an `m_LocalPosition` for each bone — and those values *are* the source
+  skeleton's proportions, where xbot's elbow sits relative to its shoulder. Applied to a rig
+  with different bone lengths they drag every joint to a position belonging to a different
+  body, so the character does not animate wrongly, it shatters.
+
+  Only rotations are bound now. A joint angle means the same thing on any skeleton with the
+  same topology, which is precisely why it transfers and a position does not — and it is the
+  work a Humanoid avatar would have done, if glTFast could produce one. Characters animate in
+  place, which is what `applyRootMotion = false` wants anyway.
+
 ## [0.11.0] - 2026-08-14
 
 ### Added

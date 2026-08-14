@@ -330,6 +330,14 @@ The clips come from a pack polyfork.dev publishes, fetched once per project into
 `Assets/Polyfork/Animations` rather than shipped in the package — 2.8 MB of Mixamo clips is a
 lot to put in every project, most of which import no characters at all.
 
+**Only rotations are bound.** A Mixamo clip carries a position curve for every bone, and
+those values *are* the source skeleton's proportions — where its elbow sits relative to its
+shoulder. Applied to a rig with different bone lengths they yank every joint to a position
+belonging to a different body, and the character comes apart rather than animating wrongly. A
+joint *angle* means the same thing on any skeleton with the same topology, so that is what
+transfers. Characters therefore animate **in place**, which suits the `applyRootMotion = false`
+the importer sets: you move the character, the clip poses it.
+
 They are bound rather than retargeted, because they cannot be retargeted. A Humanoid avatar
 is Unity's answer to playing a Mixamo clip on another rig, and **glTFast has no Humanoid
 import** — its maintainers say those importer settings *"would basically have to be

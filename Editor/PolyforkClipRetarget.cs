@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
@@ -42,6 +43,12 @@ namespace Polyfork.EditorTools
 
             foreach (var binding in AnimationUtility.GetCurveBindings(source))
             {
+                if (!IsRotation(binding.propertyName))
+                {
+                    dropped++;
+                    continue;
+                }
+
                 var bone = LeafName(binding.path);
                 if (bone == null || !paths.TryGetValue(bone, out var path))
                 {
@@ -74,15 +81,41 @@ namespace Polyfork.EditorTools
             settings.loopTime = true;
             AnimationUtility.SetAnimationClipSettings(clip, settings);
 
-            if (dropped > 0 && bound < 8)
+            /* Four curves per bone once quaternions are split into components, so a rig of
+             * ~22 bones lands near 88. Well under that means the names did not line up. */
+            if (bound < 8)
             {
                 Debug.LogWarning(
-                    $"[Polyfork] '{source.name}' bound only {bound} curve(s) to this rig " +
-                    $"({dropped} dropped). The skeleton may not be the Mixamo one these clips expect.");
+                    $"[Polyfork] '{source.name}' bound only {bound} rotation curve(s) to this rig. " +
+                    "The skeleton may not be the Mixamo one these clips expect.");
             }
 
             return clip;
         }
+
+        /// <summary>
+        /// Rotation only. Position and scale curves belong to the skeleton they were authored
+        /// on, not to this one.
+        ///
+        /// A Mixamo clip carries an m_LocalPosition curve for every bone, and those values
+        /// ARE xbot's proportions - where its elbow sits relative to its shoulder. Copy them
+        /// onto a rig with different bone lengths and every joint is yanked to a position
+        /// that belongs to a different body: the character does not animate wrongly, it comes
+        /// apart. Which is what happened.
+        ///
+        /// This is the work a Humanoid avatar would otherwise do. An avatar knows both rest
+        /// poses and can express the motion in proportion-independent terms; without one, the
+        /// only part of a clip that transfers honestly is the rotations, because a joint
+        /// angle means the same thing on any skeleton with the same topology.
+        ///
+        /// Hips translation goes too, so the character animates in place. That suits an
+        /// Animator with applyRootMotion off, which is how the importer sets it up: you move
+        /// the character, the clip poses it.
+        /// </summary>
+        static bool IsRotation(string propertyName) =>
+            !string.IsNullOrEmpty(propertyName) &&
+            (propertyName.StartsWith("m_LocalRotation", StringComparison.Ordinal) ||
+             propertyName.StartsWith("localEulerAngles", StringComparison.Ordinal));
 
         /// <summary>Every transform under the root, by name, as a path relative to it.</summary>
         static Dictionary<string, string> BonePaths(Transform root)
