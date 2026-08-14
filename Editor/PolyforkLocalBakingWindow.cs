@@ -174,6 +174,7 @@ namespace Polyfork.EditorTools
 
             EditorGUILayout.Space(10f);
 
+            // <store-strip> Asset Store submissions may not programmatically add packages.
             using (new EditorGUI.DisabledScope(_installing))
             {
                 var label = _installing ? "Installing…" : "Install PuerTS  ·  14 MB, about a minute";
@@ -183,6 +184,7 @@ namespace Polyfork.EditorTools
 
             if (_installStatus != null)
                 EditorGUILayout.LabelField(_installStatus, EditorStyles.wordWrappedMiniLabel);
+            // </store-strip>
 
             EditorGUILayout.Space(10f);
             EditorGUILayout.LabelField("Or do it by hand", EditorStyles.miniBoldLabel);
@@ -289,6 +291,7 @@ namespace Polyfork.EditorTools
         // =====================================================================
         // One-button install
         // =====================================================================
+        // <store-strip>
 
         const string InstallRequestedKey = "Polyfork.PuertsInstallRequested";
 
@@ -552,12 +555,16 @@ namespace Polyfork.EditorTools
         static async Task<string> DownloadStringAsync(string url)
             => Encoding.UTF8.GetString(await DownloadAsync(url));
 
+        // </store-strip>
+
         void OnDisable()
         {
+            // <store-strip>
             /* The install keeps going if the window is closed - Unity owns the request once
              * it is made - but this poll must stop, or it calls Repaint on a destroyed
              * window every editor tick for the rest of the session. */
             EditorApplication.update -= PollAdd;
+            // </store-strip>
         }
 
         void OnInspectorUpdate() => Repaint();   // so it flips to green without being poked

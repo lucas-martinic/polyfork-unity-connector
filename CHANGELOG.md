@@ -5,6 +5,19 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.4] - 2026-08-14
+
+### Added
+
+- **Asset Store submission kit** in `Documentation~/ASSET-STORE.md`: the blockers, listing
+  copy, image specs and a checklist.
+- **`Tools~/make-store-package.py`**, which builds the store variant from this source and
+  then *proves* it is one. Two shipped features are disqualifying on the store — the
+  one-button PuerTS install and `Polyfork ▸ Update Package` both manipulate packages in a
+  user's project, which submissions may not do. The script drops those files, cuts the
+  regions marked `// <store-strip>`, then searches the result for the forbidden calls and for
+  anything the strip left dangling, and fails if it finds either.
+
 ## [0.11.3] - 2026-08-14
 
 ### Fixed
