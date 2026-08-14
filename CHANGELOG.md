@@ -5,6 +5,47 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.1] - 2026-08-14
+
+### Fixed
+
+- **The `.unitypackage` could not be imported at all.** Unity's import dialog died before
+  drawing anything:
+
+  ```
+  NullReferenceException
+  UnityEditor.PackageImportTreeView.RecursiveComputeEnabledStateForFolders
+  UnityEditor.PackageImportTreeView.ComputeEnabledStateForFolders
+  ```
+
+  `Tools~/make-unitypackage.py` wrote the three members of each asset - `asset`, `asset.meta`,
+  `pathname` - but not the **directory member** for the GUID folder containing them. Unity's
+  exporter writes one; a package Unity exported has an `isdir()` entry per GUID and ours had
+  none.
+
+  It hid because Python's tarfile creates parent directories implicitly on extract, so every
+  check that read the package back agreed it was fine: parents present, GUIDs unique and
+  matching their metas, no childless folders, no stray characters, every member readable.
+  Rebuilding Unity's own tree-construction from its source and running it over the entry list
+  also found nothing, because the fault was never in the entries. Only diffing against a
+  package Unity actually exported showed it.
+
+  Member order and file modes now follow that reference too. Verified structurally against it
+  rather than against a round trip, which was the mistake the first time.
+
+- A wrong diagnosis reached the README, the manual and the release notes: that the crash came
+  from importing over an existing git-URL install. It did not - a fresh project crashed the
+  same way. Installing both ways is still a bad idea, because the GUIDs match and the project
+  ends up with two copies of every assembly and native plugin, but that is a compile problem
+  and not this one.
+
+### Added
+
+- `Tools~/make-store-zip.py`, which turns a built package back into a plain folder tree.
+  Unzip into `Assets/`, then let Unity export the `.unitypackage` itself, or point Asset Store
+  Tools at `Assets/Polyfork` and upload from the project. Derived from the `.unitypackage` so
+  the two cannot disagree about their contents.
+
 ## [0.12.0] - 2026-08-14
 
 ### Changed

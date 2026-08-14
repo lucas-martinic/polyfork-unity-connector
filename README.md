@@ -252,12 +252,10 @@ The gallery picks the local baker up automatically and stops reporting a remaini
 once it has: with a local engine the allowance only governs assets whose module this connection
 cannot fetch, which are the ones you could not import anyway.
 
-> **Install it one way, not two.** The `.unitypackage` is built from these same files, so its
-> assets carry the same GUIDs as a git-URL install. Importing it into a project that already
-> has the package makes Unity reconcile every asset against a copy living under `Packages/`,
-> and its import dialog throws a `NullReferenceException` in
-> `PackageImportTreeView.RecursiveComputeEnabledStateForFolders` before it can draw. Remove one
-> copy before adding the other.
+> **Install it one way, not two.** The `.unitypackage` is built from these same files and its
+> assets carry the same GUIDs as a git-URL install, so a project holding both ends up with two
+> copies of every assembly and every native plugin, which will not compile. Remove one before
+> adding the other.
 
 > **Upgrading from 0.11 or earlier?** Remove `com.tencent.puerts.core` and
 > `com.tencent.puerts.quickjs` from your project, and delete the `PuerTS` folder beside

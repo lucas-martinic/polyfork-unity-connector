@@ -62,7 +62,7 @@ without leaving the editor.</p>
 </table>
 <p>Import the package, and Unity adds a <strong>Polyfork</strong> menu. An internet connection
 is required: the catalogue, the models and the rebuilds all come from polyfork.dev.</p>
-<div class="note"><strong>Install it one way, not two.</strong> The <code>.unitypackage</code> and the git URL deliver the same files with the same GUIDs. Importing the <code>.unitypackage</code> into a project that already has the package installed makes Unity's import dialog fail with a <code>NullReferenceException</code> before it can draw, because it tries to reconcile every asset against a copy living under <code>Packages/</code>. Remove one copy before adding the other.</div>
+<div class="note"><strong>Install it one way, not two.</strong> The <code>.unitypackage</code> and the git URL deliver the same files with the same GUIDs, so a project holding both ends up with two copies of every assembly and every native plugin, which will not compile. Remove one before adding the other.</div>
 
 <h2 id="s2">2. The demo scene</h2>
 <p>Open <code>Demo/Polyfork Demo.unity</code> — under <code>Assets/Polyfork/</code> if you

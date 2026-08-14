@@ -206,7 +206,21 @@ python3 "Tools~/make-unitypackage.py" Polyfork.unitypackage
 It is attached to each GitHub release, which is the answer to "where do I get the Unity
 package" for anyone who does not want the git URL.
 
-Each release carries **two**, and the difference is only the store's policy strip:
+**For the submission, let Unity build it.** `Polyfork-AssetStore-source.zip` (from
+`Tools~/make-store-zip.py`) is the same content as a plain folder tree: unzip into `Assets/`,
+let it compile, then **Assets ▸ Export Package…**, or point Asset Store Tools straight at
+`Assets/Polyfork` and let it upload from the project. Unity's own exporter is the only thing
+that is definitively right about the format, and Asset Store Tools uploads from a project
+folder anyway.
+
+That is not a general distrust of the generator below, it is a specific scar: it shipped
+without the per-GUID **directory members** that Unity's exporter writes. Python's tarfile
+creates parent directories on extract, so the package read back perfectly and still broke
+Unity's importer, which died in `PackageImportTreeView` before drawing anything. Fixed, and
+`Tools~/make-unitypackage.py` now matches a reference package member for member - but the
+lesson is to validate against something Unity produced, not against a round trip.
+
+Each release carries **two** packages, and the difference is only the store's policy strip:
 
 | File | For | Contains |
 | --- | --- | --- |

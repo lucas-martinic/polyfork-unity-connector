@@ -45,17 +45,41 @@ def guid_of(meta: Path) -> str | None:
     return m.group(1) if m else None
 
 
-def add(tar: tarfile.TarFile, guid: str, pathname: str, meta_bytes: bytes, asset_bytes=None):
-    def entry(name: str, data: bytes):
-        info = tarfile.TarInfo(f"{guid}/{name}")
-        info.size = len(data)
-        info.mtime = 0                       # deterministic: same input, same file
-        tar.addfile(info, io.BytesIO(data))
+# Fixed so the same input produces a byte-identical file. Not 0: epoch-zero timestamps
+# are the kind of thing a strict reader is entitled to dislike, and nothing is gained.
+MTIME = 1704067200                           # 2024-01-01T00:00:00Z
 
-    entry("pathname", pathname.encode("utf-8"))
-    entry("asset.meta", meta_bytes)
+
+def add(tar: tarfile.TarFile, guid: str, pathname: str, meta_bytes: bytes, asset_bytes=None):
+    """Writes one asset, in the shape Unity's own exporter writes it.
+
+    The GUID DIRECTORY MEMBER is load-bearing and its absence is not benign. Python's
+    tarfile creates parent directories implicitly on extract, so a package without one
+    round-trips perfectly here and still breaks Unity: its extractor leaves the item list
+    malformed, and the import dialog dies building its tree, before drawing anything, with
+
+        NullReferenceException
+        UnityEditor.PackageImportTreeView.RecursiveComputeEnabledStateForFolders
+
+    which names nothing about the package and sends you looking at your own assets. Compare
+    against a package Unity exported (`tarfile.getmembers()`, count the `isdir()` entries)
+    rather than against whether Python can read it back.
+
+    Member order and modes follow the same reference: dir, asset, asset.meta, pathname.
+    """
+    def entry(name: str, data: bytes = b"", *, directory: bool = False, mode: int = 0o644):
+        info = tarfile.TarInfo(guid if directory else f"{guid}/{name}")
+        info.type = tarfile.DIRTYPE if directory else tarfile.REGTYPE
+        info.mode = 0o755 if directory else mode
+        info.size = 0 if directory else len(data)
+        info.mtime = MTIME
+        tar.addfile(info, None if directory else io.BytesIO(data))
+
+    entry("", directory=True)
     if asset_bytes is not None:
-        entry("asset", asset_bytes)
+        entry("asset", asset_bytes, mode=0o775)
+    entry("asset.meta", meta_bytes)
+    entry("pathname", pathname.encode("utf-8"))
 
 
 def build(out: Path) -> int:
