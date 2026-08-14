@@ -206,6 +206,34 @@ python3 "Tools~/make-unitypackage.py" Polyfork.unitypackage
 It is attached to each GitHub release, which is the answer to "where do I get the Unity
 package" for anyone who does not want the git URL.
 
+### Submit as a UPM package, not a .unitypackage
+
+**This is the format decision, and it is not close.** A `.unitypackage` carries no dependency
+information — it is a bag of files, not a manifest — so a buyer who imports one gets every
+Polyfork assembly failing to compile against glTFast and Newtonsoft JSON until they install both
+by hand. UPM publishing resolves declared dependencies automatically, and it is
+[available for all tools, extensions and SDKs](https://assetstore.unity.com/publishing/upm-publishing),
+which is what this is.
+
+It is also the same mechanism as section 1a: declare, don't install. Both dependencies are Unity
+Registry packages, so 5.2.c is satisfied, and no script of ours touches the Package Manager.
+
+`package.json` is already submission-ready: `name`, `version`, `displayName`, `description`,
+`unity`, plus `documentationUrl`, `changelogUrl`, `licensesUrl`, `author`, `keywords`, `samples`
+and the two `dependencies`.
+
+1. Enrol at [cloud.unity.com/assetstore/publisher](https://cloud.unity.com/assetstore/publisher).
+   Verification wants a legal name, country and government ID, and a live selfie through Persona.
+2. Create a product draft and **reserve the technical name `com.polyfork.connector`** — the
+   uploader rejects a package whose `name` does not match it.
+3. **Window ▸ Tools ▸ Asset Store ▸ Validator**, set **Validation Type: UPM**, run it.
+4. **Window ▸ Tools ▸ Asset Store ▸ Uploader ▸ UPM Packages**, upload.
+
+Ceiling is 550 MB; we are about 5 MB. Buyers get one-click updates in Package Manager rather
+than a re-import, and the package is referenced rather than copied into their project.
+
+Everything below is the `.unitypackage` route, kept for distribution outside the store.
+
 **For the submission, let Unity build it.** `Polyfork-AssetStore-source.zip` (from
 `Tools~/make-store-zip.py`) is the same content as a plain folder tree: unzip into `Assets/`,
 let it compile, then **Assets ▸ Export Package…**, or point Asset Store Tools straight at

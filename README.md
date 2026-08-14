@@ -28,10 +28,22 @@ Unity ▸ **Window ▸ Package Manager ▸ + ▸ Add package from git URL**:
 https://github.com/lucas-martinic/polyfork-unity-connector.git
 ```
 
+That resolves both dependencies for you, because Package Manager reads them from the manifest.
+
 Or grab **`Polyfork.unitypackage`** from
 [Releases](https://github.com/lucas-martinic/polyfork-unity-connector/releases) and
 double-click it. The git URL updates in place from `Polyfork ▸ Update Package`; the
 `.unitypackage` is the one-file version for handing to somebody.
+
+> **A `.unitypackage` carries no dependency information**, so install these two first —
+> *Window ▸ Package Manager ▸ + ▸ Install package by name*. Both are free, from Unity's own
+> registry. Skip it and every Polyfork assembly fails to compile against references it cannot
+> find; the Console then names the missing package and why it is needed.
+>
+> ```
+> com.unity.cloud.gltfast
+> com.unity.nuget.newtonsoft-json
+> ```
 
 Or by hand, which also lets you pin a version with `#v0.2.0`:
 

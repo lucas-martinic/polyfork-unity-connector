@@ -54,14 +54,20 @@ without leaving the editor.</p>
 
 <h2 id="s1">1. Requirements and installation</h2>
 <p>Unity <strong>6000.0 or newer</strong>. Works with the built-in render pipeline and URP.</p>
-<p>The package depends on two Unity Registry packages, which Unity resolves for you:</p>
+<p>The package depends on two Unity Registry packages, both free:</p>
 <table>
   <tr><th>Package</th><th>Why</th></tr>
   <tr><td><code>com.unity.cloud.gltfast</code></td><td>Reads and writes the <code>.glb</code> files models arrive as</td></tr>
   <tr><td><code>com.unity.nuget.newtonsoft-json</code></td><td>Parses the catalogue and each model's parameter schema</td></tr>
 </table>
-<p>Import the package, and Unity adds a <strong>Polyfork</strong> menu. An internet connection
-is required: the catalogue, the models and the rebuilds all come from polyfork.dev.</p>
+<p>Installed through <strong>Package Manager</strong> — from the Asset Store or the git URL —
+Unity reads those from the manifest and fetches them for you, and there is nothing to do.</p>
+<p>Installed from a <code>.unitypackage</code>, there is: that format carries no dependency
+information, so add both yourself first, with <em>Window ▸ Package Manager ▸ + ▸ Install package
+by name</em>. Skip it and every Polyfork assembly fails to compile against references it cannot
+find; the Console says which package is missing and why.</p>
+<p>Either way Unity then adds a <strong>Polyfork</strong> menu. An internet connection is
+required: the catalogue, the models and the rebuilds all come from polyfork.dev.</p>
 <div class="note"><strong>Install it one way, not two.</strong> The <code>.unitypackage</code> and the git URL deliver the same files with the same GUIDs, so a project holding both ends up with two copies of every assembly and every native plugin, which will not compile. Remove one before adding the other.</div>
 
 <h2 id="s2">2. The demo scene</h2>

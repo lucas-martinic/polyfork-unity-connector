@@ -5,6 +5,28 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.2] - 2026-08-14
+
+### Added
+
+- **The Console now says which dependency is missing**, instead of leaving a wall of
+  unresolved-reference errors. `Editor/Bootstrap/` is a tiny assembly that references
+  **nothing**, which makes it the only part of the connector that still compiles when glTFast or
+  Newtonsoft JSON is absent, and therefore the only part left that can explain why the rest did
+  not. It reports and stops there; installing them itself would be the store's 2.5.1.e.
+
+  This only ever fires for a `.unitypackage` install. That format carries no dependency
+  information at all - it is a bag of files, not a manifest - so nothing resolves them. Package
+  Manager installs, from the git URL or from the Asset Store, read `package.json` and fetch both
+  before any of our code runs.
+
+### Changed
+
+- `Documentation~/ASSET-STORE.md` now leads with **submitting as a UPM package rather than a
+  `.unitypackage`**, which is what makes declared dependencies install themselves for a buyer.
+  UPM publishing is open to all tools, extensions and SDKs, `package.json` is already
+  submission-ready, and the technical name to reserve is `com.polyfork.connector`.
+
 ## [0.12.1] - 2026-08-14
 
 ### Fixed
