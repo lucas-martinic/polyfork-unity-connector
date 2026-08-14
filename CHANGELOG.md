@@ -5,6 +5,29 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2026-08-14
+
+### Changed
+
+- **The package id is now `dev.polyfork.unity`**, was `dev.polyfork.connector` for the few hours
+  0.13.0 existed.
+
+  The `dev.polyfork` half was never a choice: the Asset Store derives the publisher namespace
+  from the domain you verified, so `polyfork.dev` gives `dev.polyfork`. The product half was,
+  and it is not changeable once the namespace is claimed, so it got settled before claiming
+  rather than after. `unity` says what the product is to somebody reading the id; `connector`
+  says what it is to us, and only names the repository it came out of.
+
+### Upgrading
+
+- **Remove the package and add the git URL again**, from either `com.polyfork.connector`
+  (0.12.x and earlier) or `dev.polyfork.connector` (0.13.0). Unity keys a manifest entry by the
+  package's own name, so neither old id resolves this package and `Polyfork ▸ Update Package`
+  cannot cross a rename.
+
+  Assembly names, C# namespaces and every asset GUID are untouched, so scenes, prefabs and
+  script references survive it. The repository keeps its name, so the git URL is unchanged.
+
 ## [0.13.0] - 2026-08-14
 
 ### Changed
