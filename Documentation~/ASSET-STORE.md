@@ -48,6 +48,28 @@ nothing reduces the exposure without erasing it. If a complaint ever arrives, th
 already scoped — the retargeting code does not care where clips come from, only that the bone
 names are Mixamo-compatible, so a CC0 locomotion set drops in without touching anything else.
 
+### 1d. Validation: demo scene and offline documentation — **handled**
+
+The Asset Store Tools validator failed the first submission on two counts:
+
+> *Could not find any valid Demo Scenes in the selected validation paths.*
+> *No potential documentation files ('.txt', '.pdf', '.html', '.rtf', '.md') found within the
+> given path.*
+
+Both now ship, and both only in the store build — a git-URL install has no business getting a
+demo scene and a manual dumped into the consumer's project. They live under `StoreExtras~/`,
+which Unity ignores, and `make-store-package.py` unpacks them to `Demo/` and `Documentation/`.
+
+- **`Demo/Polyfork Demo.unity`** — camera, key light, and an object called
+  *START HERE - Polyfork* whose Inspector lists the four steps with a button that opens the
+  gallery. The guidance allows exactly this for an editor extension: *"a demo scene showcasing
+  the asset or showing setup steps in the scene"*. It ships without models deliberately —
+  Polyfork browses a catalogue that lives online, so what belongs in the scene is whatever the
+  user picks; importing one puts it there, which is the demo.
+- **`Documentation/Polyfork-Manual.html`** — twelve numbered sections with a table of contents,
+  covering install, the demo scene, browsing, remixing, importing, re-editing, characters,
+  local rebuilds, keys, scripting and troubleshooting. HTML is on the accepted list.
+
 ### 1c. Free on GitHub — **settled: the package is free**
 
 MIT and public, and the store listing is free too, so there is no gap between what a buyer
@@ -176,6 +198,7 @@ than photographing the whole editor. Avoid Unity's default skybox in any scene s
 
 - [x] **1b settled** — pack kept, package ships free
 - [x] **Price settled** — free
+- [x] **Demo scene and offline documentation** — in the store build
 - [ ] Publisher account created at [publisher.unity.com](https://publisher.unity.com), profile
       filled in (name, description, logo, contact)
 - [ ] `python3 "Tools~/make-store-package.py"` run, output **clean**

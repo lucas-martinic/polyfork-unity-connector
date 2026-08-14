@@ -5,6 +5,23 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.5] - 2026-08-14
+
+### Added
+
+- **A demo scene and an offline manual, for Asset Store validation.** The validator failed the
+  submission on both: no demo scene found, and no documentation file in the accepted formats.
+
+  `Demo/Polyfork Demo.unity` has a camera, a key light and an object whose Inspector lists the
+  four setup steps with a button that opens the gallery — which is what the guidance asks of an
+  editor extension. It ships without models on purpose: Polyfork browses a catalogue that lives
+  online, so the thing that belongs in the scene is whatever the user imports into it.
+
+  `Documentation/Polyfork-Manual.html` is twelve numbered sections with a table of contents.
+
+  Both live under `StoreExtras~/` and are unpacked only by `make-store-package.py`. A git-URL
+  install has no business getting a demo scene and a manual dropped into the project.
+
 ## [0.11.4] - 2026-08-14
 
 ### Added

@@ -29,7 +29,9 @@ ROOT = Path(__file__).resolve().parent.parent
 PREFIX = "Assets/Polyfork"
 
 # Everything a consumer needs; nothing that only makes sense as a UPM package.
-INCLUDE_DIRS = ["Runtime", "Editor"]
+# Demo and Documentation exist only in a store build (see make-store-package.py),
+# and are skipped silently when absent.
+INCLUDE_DIRS = ["Runtime", "Editor", "Demo", "Documentation"]
 INCLUDE_FILES = ["README.md", "LICENSE.md", "Third Party Notices.md", "CHANGELOG.md"]
 
 GUID_RE = re.compile(r"^guid:\s*([0-9a-fA-F]{32})\s*$", re.MULTILINE)

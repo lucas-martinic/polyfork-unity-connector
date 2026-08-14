@@ -49,7 +49,7 @@ FORBIDDEN = [
     (r"packages-lock\.json", "edits the project's package lock"),
 ]
 
-SKIP_DIRS = {".git", "Library", "Temp", "obj"}
+SKIP_DIRS = {".git", "Library", "Temp", "obj", "StoreExtras~"}
 
 
 def strip_regions(text: str) -> str:
@@ -76,6 +76,22 @@ def build(out: Path) -> int:
         if target.exists():
             target.unlink()
             print(f"  dropped  {rel}")
+
+    # Asset Store validation asks for two things a UPM package has no business
+    # shipping to every consumer: a demo scene and offline documentation. They
+    # live under a ~ folder so Unity ignores them for git-URL installs, and are
+    # unpacked here, where the validator expects to find them.
+    extras = ROOT / "StoreExtras~"
+    if extras.exists():
+        for child in sorted(extras.iterdir()):
+            # StoreExtras~/Demo -> Demo, and its .meta alongside it
+            target = out / child.name.removesuffix(".meta") if child.name.endswith(".meta") \
+                else out / child.name
+            if child.is_dir():
+                shutil.copytree(child, target)
+            else:
+                shutil.copy2(child, out / child.name)
+            print(f"  added    {child.name}")
 
     stripped = 0
     for path in out.rglob("*.cs"):

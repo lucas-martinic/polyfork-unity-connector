@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Polyfork for Unity — Manual</title>
+<style>
+  :root { --ink:#121a26; --mut:#67748a; --line:#dde3ea; --bg:#f4f6f9; --acc:#1f6feb; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  .wrap { max-width:840px; margin:0 auto; padding:48px 24px 80px; }
+  h1 { font-size:34px; letter-spacing:-.02em; margin:0 0 4px; }
+  .sub { color:var(--mut); margin:0 0 32px; }
+  h2 { font-size:22px; margin:40px 0 10px; padding-top:18px; border-top:1px solid var(--line); }
+  h3 { font-size:17px; margin:24px 0 6px; }
+  p, li { color:#243044; }
+  code, pre { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13.5px; }
+  code { background:#eef1f5; padding:1px 5px; border-radius:4px; }
+  pre { background:#fff; border:1px solid var(--line); border-radius:8px;
+        padding:12px 14px; overflow-x:auto; }
+  table { border-collapse:collapse; width:100%; margin:12px 0; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); font-size:14.5px; }
+  th { color:var(--mut); font-weight:600; }
+  .toc { background:#fff; border:1px solid var(--line); border-radius:10px; padding:16px 20px; }
+  .toc ol { margin:0; padding-left:20px; }
+  .toc a { color:var(--acc); text-decoration:none; }
+  .note { background:#fff; border-left:3px solid var(--acc); padding:10px 14px; margin:14px 0;
+          border-radius:0 8px 8px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Polyfork for Unity</h1>
+<p class="sub">Browse, remix and import 3D assets without leaving the editor. Manual for
+version 0.11.x.</p>
+
+<div class="toc">
+  <ol>
+    <li><a href="#s1">Requirements and installation</a></li>
+    <li><a href="#s2">The demo scene</a></li>
+    <li><a href="#s3">Browsing the catalogue</a></li>
+    <li><a href="#s4">Remixing a model</a></li>
+    <li><a href="#s5">Importing</a></li>
+    <li><a href="#s6">Editing a model after it is in the scene</a></li>
+    <li><a href="#s7">Characters, rigs and animation</a></li>
+    <li><a href="#s8">Instant local rebuilds (optional)</a></li>
+    <li><a href="#s9">Accounts, the free tier and API keys</a></li>
+    <li><a href="#s10">Scripting reference</a></li>
+    <li><a href="#s11">Troubleshooting</a></li>
+    <li><a href="#s12">Licence and third-party notices</a></li>
+  </ol>
+</div>
+
+<h2 id="s1">1. Requirements and installation</h2>
+<p>Unity <strong>6000.0 or newer</strong>. Works with the built-in render pipeline and URP.</p>
+<p>The package depends on two Unity Registry packages, which Unity resolves for you:</p>
+<table>
+  <tr><th>Package</th><th>Why</th></tr>
+  <tr><td><code>com.unity.cloud.gltfast</code></td><td>Reads and writes the <code>.glb</code> files models arrive as</td></tr>
+  <tr><td><code>com.unity.nuget.newtonsoft-json</code></td><td>Parses the catalogue and each model's parameter schema</td></tr>
+</table>
+<p>Import the package, and Unity adds a <strong>Polyfork</strong> menu. An internet connection
+is required: the catalogue, the models and the rebuilds all come from polyfork.dev.</p>
+
+<h2 id="s2">2. The demo scene</h2>
+<p>Open <code>Assets/Polyfork/Demo/Polyfork Demo.unity</code>. It contains a camera, a key
+light, and an object named <strong>START HERE - Polyfork</strong>. Select it and the Inspector
+lists the four steps, with a button that opens the gallery.</p>
+<div class="note">The scene ships without models on purpose. Polyfork is a browser for a
+catalogue that lives online, so what belongs in a demo scene is whatever <em>you</em> choose
+from it. Import one and it lands in this scene — that is the demo.</div>
+
+<h2 id="s3">3. Browsing the catalogue</h2>
+<p><strong>Polyfork ▸ Browse Assets</strong>, or <code>Ctrl/Cmd + Shift + P</code>.</p>
+<ul>
+  <li>Search by name, and filter by kit, class, free-only, remixable-only or triangle budget.</li>
+  <li>Click a card to select it: the panel on the right previews the real model, orbitable by
+      dragging and zoomable by scrolling.</li>
+  <li>The panel lists what the model can be changed into, without changing it.</li>
+  <li>Paid models you do not own are dimmed and badged <code>locked</code>. They still preview
+      and still remix; what needs a licence is writing one into your project.</li>
+</ul>
+
+<h2 id="s4">4. Remixing a model</h2>
+<p>Press <strong>Remix this asset</strong>, or double-click a card. The model takes the whole
+window with its controls beside it. <kbd>Esc</kbd> returns to the catalogue.</p>
+<table>
+  <tr><th>Control</th><th>What it does</th></tr>
+  <tr><td>Colourway chips</td><td>Recolours every part at once, instantly</td></tr>
+  <tr><td>Colour pickers</td><td>One vertex-colour slot each, instantly</td></tr>
+  <tr><td>Sliders</td><td>Reshapes the model — a rebuild</td></tr>
+  <tr><td>Dropdowns and toggles</td><td>Structural options — also a rebuild</td></tr>
+</table>
+<p>Every label, range, option and colour comes from the model's own published schema, so a
+parameter added on polyfork.dev appears here without updating this package.</p>
+
+<h2 id="s5">5. Importing</h2>
+<p><strong>Import GLB to project</strong> writes two files into
+<code>Assets/Polyfork/</code> — the <code>.glb</code> and a prefab beside it — and drops the
+prefab into the open scene in front of the camera, selected and undoable.</p>
+<p>Models arrive at real-world scale with the origin on the ground, so they need no rescaling.
+Colour lives in the vertices on a single material: no textures to relink, no UV layout, and a
+set of models sharing that material merges into one draw call.</p>
+
+<h2 id="s6">6. Editing a model after it is in the scene</h2>
+<p>The prefab carries a <code>PolyforkAssetLink</code> component holding the asset id and the
+parameter values. Select it and the Inspector shows the knobs again; move one and the model
+rebuilds where it stands.</p>
+<p>Rebuilding replaces the meshes only, so the transform, children, colliders, any components
+you added and any material you assigned all survive the change.</p>
+
+<h2 id="s7">7. Characters, rigs and animation</h2>
+<p>Rigged models import with an <code>Animator</code>, a
+<code>PolyforkCharacterAnimation</code> component and a set of clips bound to their own
+skeleton, <strong>idle playing by default</strong>. The Inspector has a dropdown for the rest.</p>
+<p>From script:</p>
+<pre>var anim = character.GetComponent&lt;PolyforkCharacterAnimation&gt;();
+anim.Play("walk");     // by name, case-insensitive
+anim.Play(2);          // or by index</pre>
+<p>Characters animate <em>in place</em>: only rotation curves are bound, because position
+curves encode the source skeleton's proportions and would pull a differently-sized rig apart.
+That suits <code>applyRootMotion = false</code>, which the importer sets — you move the
+character, the clip poses it.</p>
+
+<h2 id="s8">8. Instant local rebuilds (optional)</h2>
+<p>By default a parameter change asks polyfork.dev to rebuild the mesh: roughly 120 ms, and it
+counts against an hourly allowance. Install a JavaScript engine and the editor runs the
+model's own program instead — instant, and it spends nothing.</p>
+<p><strong>Polyfork ▸ Setup</strong> explains the steps and reports when it has worked. It is
+editor-only: neither the engine nor its scripts can reach a player build.</p>
+<div class="note">Rigged models always rebuild on the server, because the trimmed geometry
+library used locally omits the skinning classes.</div>
+
+<h2 id="s9">9. Accounts, the free tier and API keys</h2>
+<p>No account is needed to browse, preview, remix or import free models — about half the
+catalogue — with no attribution and commercial use allowed.</p>
+<p>An API key raises the hourly rebuild allowance and unlocks the paid catalogue. Add it under
+<strong>Polyfork ▸ API Key…</strong>. Keys are stored in <code>EditorPrefs</code> on your
+machine and never written into a scene or a repository. A key set through the
+<code>POLYFORK_API_KEY</code> environment variable or a <code>polyfork.key</code> file is
+picked up too, and the window says which source is in force.</p>
+
+<h2 id="s10">10. Scripting reference</h2>
+<table>
+  <tr><th>Type</th><th>Purpose</th></tr>
+  <tr><td><code>PolyforkCatalog</code></td><td>Loads the catalogue and resolves models at run time</td></tr>
+  <tr><td><code>PolyforkSpawner</code></td><td>Spawns a model into a scene</td></tr>
+  <tr><td><code>PolyforkRemixable</code></td><td>Drives a spawned model's parameters at play time</td></tr>
+  <tr><td><code>PolyforkAssetLink</code></td><td>Records which model a GameObject is, and its values</td></tr>
+  <tr><td><code>PolyforkCharacterAnimation</code></td><td>Plays a chosen clip on a rigged model</td></tr>
+</table>
+<p>The <strong>Runtime API</strong> sample (Package Manager ▸ Samples) spawns a model and
+drives a parameter from script.</p>
+
+<h2 id="s11">11. Troubleshooting</h2>
+<h3>The gallery is empty</h3>
+<p>Check the status bar at the bottom of the window; it reports what the last request did.
+An internet connection is required.</p>
+<h3>Controls are greyed out</h3>
+<p>The hourly rebuild allowance is spent. Add an API key, or install a local engine
+(section 8) — a local rebuild is never metered, so nothing is greyed out once one is running.</p>
+<h3>An imported model is grey</h3>
+<p>Colour lives in vertex colours. If you replace the material, use one that multiplies by
+vertex colour; Unity's Standard and URP/Lit shaders discard it.</p>
+<h3>A character does not animate</h3>
+<p>Check the Console. The binding reports how many curves it matched; a very low number means
+the skeleton was not the expected one.</p>
+
+<h2 id="s12">12. Licence and third-party notices</h2>
+<p>This package is MIT licensed. The full text is in <code>LICENSE.md</code>, and components
+with their own licences are listed in <code>Third Party Notices.md</code>, both included.</p>
+<p>Models carry their own terms, stated on each model's page: free models allow commercial use
+with no attribution.</p>
+<p>Source: <a href="https://github.com/lucas-martinic/polyfork-unity-connector">github.com/lucas-martinic/polyfork-unity-connector</a></p>
+
+</div>
+</body>
+</html>
