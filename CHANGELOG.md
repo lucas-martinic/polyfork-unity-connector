@@ -5,6 +5,39 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1] - 2026-08-14
+
+### Fixed
+
+- **Importing a character wrote no prefab.** `GetComponent<Animator>() ?? AddComponent<...>()`
+  is the classic Unity trap: `==` is overloaded to report a missing object as null, `??` is
+  not, so the coalesce kept a component that exists only as far as C# is concerned and the
+  next line threw `There is no 'Animator' attached`. The throw took the whole prefab with it,
+  so the asset imported with no knobs and no animation.
+- **The model appeared in the scene and hung around before vanishing.** The staging instance
+  was `HideInHierarchy`, which hides it from the Hierarchy window while the Scene view draws
+  it anyway — and the 2.8 MB clip pack was being downloaded while it sat there. The pack is
+  now fetched before anything is instantiated, and the instance is created **inactive**
+  rather than merely hidden.
+- **`Light.shadowResolution is compatible only with the Built-In Render Pipeline`** on every
+  preview under URP. Removed; the shadow is drawn geometry now, so the light's own shadow
+  quality settles nothing.
+- **Rigged assets no longer attempt a local bake.** Two independent failures, both on rigged
+  models — `field-console-a92adc` returned a hierarchy with no meshes, `village-engineer-a44949`
+  threw `TypeError: not a function at buildSkeleton`. The trimmed three.js bundle omits the
+  skinning classes, so a module that builds a skeleton has nothing to build it with. They go
+  straight to the server, which bakes them properly.
+
+### Changed
+
+- The API key window's first button reads **Create an API Key** rather than "Create an
+  account": in a window whose job is to be given a key, the useful button is the one that
+  produces one.
+- **The "a key is already active" note moved below the field.** It only drew once a key
+  resolved, so pasting one made it appear on the next repaint — and anything appearing above
+  a text field shifts every control id under it, which is why the first paste threw
+  `ArgumentOutOfRangeException` out of Unity's own paste handler and the second worked.
+
 ## [0.10.0] - 2026-08-14
 
 ### Added

@@ -52,8 +52,9 @@ namespace Polyfork.EditorTools
                 _ => "the component inspector"
             };
 
-            EditorGUILayout.HelpBox($"A key is already active, from {where}.", MessageType.Info);
-            EditorGUILayout.Space(4f);
+            EditorGUILayout.Space(2f);
+            EditorGUILayout.LabelField($"A key is already active, from {where}.",
+                EditorStyles.wordWrappedMiniLabel);
         }
 
         [MenuItem("Polyfork/API Key…", priority = 1)]
@@ -73,8 +74,6 @@ namespace Polyfork.EditorTools
         {
             PolyforkBrand.DrawHeader("Lifts the remix cap and unlocks paid downloads");
             EditorGUILayout.Space(6f);
-
-            DrawActiveKeySource();
 
             if (_wasRateLimited)
             {
@@ -112,11 +111,30 @@ namespace Polyfork.EditorTools
                 "Stored in EditorPrefs on this machine only — never written into your scene or repo.",
                 EditorStyles.miniLabel);
 
+            /* Below the field, and that placement is load-bearing.
+             *
+             * This note only draws once a key resolves, so pasting one made it appear on the
+             * next repaint - and anything appearing ABOVE a text field shifts every control
+             * id under it. IMGUI keys the text editor's selection by control id, so the
+             * editor woke up holding a selection that belonged to a different control and
+             * Unity's paste path cut a Substring with stale indices:
+             *
+             *   ArgumentOutOfRangeException: startIndex cannot be larger than length of string
+             *     at TextEditingUtilities.DeleteSelection ... PasswordField
+             *
+             * It threw on the first paste and worked on the second, because by then the note
+             * was already there and the layout had stopped moving. Nothing that comes and
+             * goes belongs above a field someone is typing into. */
+            DrawActiveKeySource();
+
             EditorGUILayout.Space(8f);
 
             using (new EditorGUILayout.HorizontalScope())
             {
-                if (GUILayout.Button("Create an account", GUILayout.Height(22f)))
+                /* "Create an API Key", not "Create an account": in a window whose whole job
+                 * is to be given a key, the useful button is the one that produces one. The
+                 * account is a step on the way, not the thing being asked for. */
+                if (GUILayout.Button("Create an API Key", GUILayout.Height(22f)))
                     Application.OpenURL(PolyforkKeySettings.AccountUrl);
 
                 if (GUILayout.Button("See plans", GUILayout.Height(22f)))

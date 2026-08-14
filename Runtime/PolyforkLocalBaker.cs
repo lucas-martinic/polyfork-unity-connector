@@ -103,7 +103,21 @@ namespace Polyfork
         /// download field reports: free assets publish it to everyone, paid assets need a key.
         /// </summary>
         public bool CanBake(PolyforkAsset asset, PolyforkParams schema)
-            => asset != null && asset.HasModule && !_unbakeable.Contains(asset.Id);
+            => asset != null
+               && asset.HasModule
+               && !asset.HasRig
+               && !_unbakeable.Contains(asset.Id);
+
+        /* Rigged assets are excluded up front rather than discovered one failure at a time.
+         *
+         * Two independent ways of failing, both on rigged models: field-console-a92adc came
+         * back with a hierarchy and no meshes, and village-engineer-a44949 threw
+         * "TypeError: not a function at buildSkeleton". The trimmed three.js bundle leaves
+         * out the skinning classes, so a module that builds a skeleton has nothing to build
+         * it with - and no amount of retrying changes that.
+         *
+         * The server bakes them properly, so this costs a round trip on characters and saves
+         * a guaranteed-to-fail bake plus that same round trip on every knob change. */
 
         /// <summary>
         /// Assets this runtime has already failed on, so it stops offering to try again.

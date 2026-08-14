@@ -213,9 +213,21 @@ namespace Polyfork.EditorTools
                 var model = AssetDatabase.LoadAssetAtPath<GameObject>(glbPath);
                 if (model == null) return null;
 
+                // Fetch the clip pack BEFORE anything is in the scene, so a slow download
+                // does not happen with a staging object sitting in front of the user.
+                if (model.GetComponentInChildren<SkinnedMeshRenderer>(true) != null)
+                    await PolyforkAnimationPack.PrewarmAsync();
+
                 instance = UnityEngine.Object.Instantiate(model);
                 instance.name = model.name;
-                instance.hideFlags = HideFlags.HideInHierarchy;   // never blink in the Hierarchy
+
+                /* Inactive, not merely hidden. HideInHierarchy keeps it out of the Hierarchy
+                 * window and the Scene view draws it anyway, which is what "showed in the
+                 * scene then disappeared" was: a staging object rendering for as long as the
+                 * work took, then destroyed. Re-activated just before saving, since the
+                 * prefab stores its active state. */
+                instance.SetActive(false);
+                instance.hideFlags = HideFlags.HideInHierarchy;
 
                 var link = instance.AddComponent<PolyforkAssetLink>();
                 link.assetId = asset.Id;
@@ -230,6 +242,9 @@ namespace Polyfork.EditorTools
                  * bound to THIS skeleton here, while the hierarchy is in hand. */
                 await PolyforkAnimationPack.SetUpAsync(
                     instance, asset.Id, Path.GetDirectoryName(glbPath)?.Replace('\\', '/') ?? DefaultFolder);
+
+                instance.SetActive(true);
+                instance.hideFlags = HideFlags.None;
 
                 var prefabPath = Path.ChangeExtension(glbPath, ".prefab");
                 prefabPath = AssetDatabase.GenerateUniqueAssetPath(prefabPath);

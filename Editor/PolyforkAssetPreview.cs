@@ -61,9 +61,13 @@ namespace Polyfork.EditorTools
             _utility.lights[0].transform.rotation = Quaternion.LookRotation(new Vector3(-4f, -7f, -5f));
             _utility.lights[0].shadows = LightShadows.Soft;
             _utility.lights[0].shadowStrength = 0.32f;   // ShadowMaterial opacity 0.18 on the web, plus ambient
-            _utility.lights[0].shadowBias = 0.005f;      // the ground is a big flat plane: prime acne territory
+            _utility.lights[0].shadowBias = 0.005f;
             _utility.lights[0].shadowNormalBias = 0.05f;
-            _utility.lights[0].shadowResolution = UnityEngine.Rendering.LightShadowResolution.VeryHigh;
+
+            /* No shadowResolution here. It is a built-in-pipeline property, and setting it
+             * under URP logs "compatible only with the Built-In Render Pipeline" on every
+             * preview. The shadow is drawn geometry now anyway, so the light's own shadow
+             * quality settles nothing. */
 
             // rim: 0xdfe8ff at 0.9, from (-5, 4, -6)
             _utility.lights[1].color = new Color(0.874f, 0.910f, 1f);

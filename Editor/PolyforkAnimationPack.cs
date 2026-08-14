@@ -31,6 +31,16 @@ namespace Polyfork.EditorTools
         public static bool IsInstalled => File.Exists(Path);
 
         /// <summary>
+        /// Fetches the pack before anything is instantiated.
+        ///
+        /// Downloading 2.8 MB is not a thing to do while a staging object sits in the user's
+        /// open scene: the object is visible for however long the network takes, which is
+        /// what turned "a frame of flicker" into a model that appeared, waited around and
+        /// then vanished.
+        /// </summary>
+        public static Task PrewarmAsync() => LoadAsync();
+
+        /// <summary>
         /// The clips, fetching the pack first if this project has not got it.
         ///
         /// Returns an empty array rather than throwing: a character that imports without
@@ -119,11 +129,23 @@ namespace Polyfork.EditorTools
                 return false;
             }
 
-            var animator = prefabInstance.GetComponent<Animator>() ?? prefabInstance.AddComponent<Animator>();
+            /* Never ?? a UnityEngine.Object.
+             *
+             * Unity overloads == to report a destroyed or missing object as null, and ??
+             * does not go through that overload - it tests the reference. So the coalesce
+             * kept a component that "exists" only as far as C# is concerned, and the next
+             * line dereferenced it:
+             *
+             *   There is no 'Animator' attached to the "Village-engineer" game object
+             *
+             * which surfaced as "could not write a prefab", because the throw took the whole
+             * prefab with it. */
+            var animator = prefabInstance.GetComponent<Animator>();
+            if (animator == null) animator = prefabInstance.AddComponent<Animator>();
             animator.applyRootMotion = false;
 
-            var player = prefabInstance.GetComponent<PolyforkCharacterAnimation>()
-                         ?? prefabInstance.AddComponent<PolyforkCharacterAnimation>();
+            var player = prefabInstance.GetComponent<PolyforkCharacterAnimation>();
+            if (player == null) player = prefabInstance.AddComponent<PolyforkCharacterAnimation>();
 
             player.clips = bound.ToArray();
             player.current = -1;      // -1 means "the default", which is found by name
