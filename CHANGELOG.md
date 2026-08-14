@@ -5,6 +5,25 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.2] - 2026-08-14
+
+### Fixed
+
+- **Rebuilding in the scene swapped the material for a preview shader.** A bake returns
+  meshes wearing the baker's own material, and the local baker's is `Polyfork/Vertex Color`,
+  which does its own lighting and ignores the scene's — so a rebuilt model went unlit and
+  stopped being the glTFast material the import gave it. Rebuilds now keep whatever material
+  the object is already wearing, which also means one you assigned yourself survives a knob
+  change.
+
+### Changed
+
+- **Import puts the model in the scene**, in front of the scene view, selected and
+  undoable. The model used to appear only as a side effect of the export staging it, which
+  meant the one moment it was visible was the moment before it was thrown away. Placing it
+  deliberately is both the obvious thing to want after pressing Import and the honest version
+  of what was already happening.
+
 ## [0.8.1] - 2026-08-14
 
 ### Fixed

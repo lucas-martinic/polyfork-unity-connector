@@ -269,9 +269,13 @@ if (remixable.IsMorphable("width")) {
 
 ## Still editable after you drop it in a scene
 
-Importing writes two files: the `.glb`, and a **prefab beside it carrying a
-`PolyforkAssetLink`**. Drag the prefab in and the Inspector keeps the asset's knobs — move a
-slider and the model changes in place as you go.
+Importing writes two files — the `.glb` and a **prefab beside it carrying a
+`PolyforkAssetLink`** — and drops the prefab into the open scene in front of the camera.
+Select it and the Inspector keeps the asset's knobs: move a slider and the model changes in
+place as you go.
+
+Rebuilding keeps whatever material the object is wearing, so a material you assigned
+yourself survives a knob change.
 
 Rebuilding replaces the meshes on the object, so its transform, its children, its colliders
 and anything else you attached survive the change. The knob values are stored on the

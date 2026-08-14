@@ -1382,6 +1382,36 @@ namespace Polyfork.EditorTools
                 EditorGUILayout.HelpBox(_importMessage, _importMessageType);
         }
 
+        /// <summary>
+        /// Drops the imported prefab into the open scene, in front of the scene view.
+        ///
+        /// In front of the camera rather than at the origin: a 2 m prop placed at (0,0,0) in
+        /// a scene the user is looking at from somewhere else is indistinguishable from an
+        /// import that did nothing. Returns null when there is no scene view to aim at, in
+        /// which case the prefab is still on disk and the message says so.
+        /// </summary>
+        static GameObject PlaceInScene(string prefabPath)
+        {
+            if (string.IsNullOrEmpty(prefabPath)) return null;
+
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+            if (prefab == null) return null;
+
+            var instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+            if (instance == null) return null;
+
+            var view = SceneView.lastActiveSceneView;
+            if (view != null && view.camera != null)
+            {
+                var cam = view.camera.transform;
+                instance.transform.position = cam.position + cam.forward * 4f;
+            }
+
+            Undo.RegisterCreatedObjectUndo(instance, "Import Polyfork asset");
+            Selection.activeGameObject = instance;
+            return instance;
+        }
+
         async Task ImportAsync()
         {
             var asset = _selected;
@@ -1408,13 +1438,19 @@ namespace Polyfork.EditorTools
 
             if (result.Success)
             {
-                /* Point at the prefab, not the .glb. The prefab is the one carrying the
-                 * knob values, so it is the one worth dragging into a scene - drop the .glb
-                 * instead and the model is frozen the moment it lands. */
-                _importMessage = result.PrefabPath != null
-                    ? $"Imported to {result.PrefabPath}. Drag it in - its knobs stay editable in the Inspector."
-                    : result.ColorsBaked
-                        ? $"Imported to {result.AssetPath} with your colours baked in."
+                /* Put it in the scene and leave it there.
+                 *
+                 * Importing used to write a file and, along the way, briefly show the model
+                 * while the export staged it - so the one moment the object was visible was
+                 * the moment it was about to be thrown away. Placing it deliberately is both
+                 * the obvious thing to want after pressing Import and the honest version of
+                 * what was happening by accident. */
+                var placed = PlaceInScene(result.PrefabPath);
+
+                _importMessage = placed != null
+                    ? $"Added {placed.name} to the scene. Its knobs stay editable in the Inspector."
+                    : result.PrefabPath != null
+                        ? $"Imported to {result.PrefabPath}. Drag it in - its knobs stay editable in the Inspector."
                         : $"Imported to {result.AssetPath}.";
                 _importMessageType = MessageType.Info;
 

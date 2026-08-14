@@ -293,6 +293,19 @@ namespace Polyfork.EditorTools
                     return;
                 }
 
+                /* Keep whatever material the object is already wearing.
+                 *
+                 * A bake hands back meshes dressed in the baker's own material, and the local
+                 * baker's is Polyfork/Vertex Color - a preview shader that does its own
+                 * lighting and ignores the scene's. Dropping that onto an object in a real
+                 * scene is why a rebuilt model suddenly looked unlit: it was, and it had
+                 * stopped being the glTFast material the import gave it.
+                 *
+                 * Reading it off the object rather than reconstructing it also means a
+                 * material the user assigned themselves survives a knob change, which is the
+                 * behaviour they would expect without being told. */
+                var existing = link.GetComponentInChildren<Renderer>(true)?.sharedMaterial;
+
                 Undo.RegisterFullObjectHierarchyUndo(link.gameObject, "Polyfork rebuild");
 
                 foreach (Transform child in link.transform.Cast<Transform>().ToList())
@@ -302,6 +315,12 @@ namespace Polyfork.EditorTools
                 {
                     child.SetParent(link.transform, worldPositionStays: false);
                     Undo.RegisterCreatedObjectUndo(child.gameObject, "Polyfork rebuild");
+                }
+
+                if (existing != null)
+                {
+                    foreach (var r in link.GetComponentsInChildren<Renderer>(true))
+                        r.sharedMaterial = existing;
                 }
 
                 link.knobValues = _values.ToString();
