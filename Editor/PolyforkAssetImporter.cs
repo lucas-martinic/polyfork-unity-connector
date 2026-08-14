@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using GLTFast.Export;
+using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
 
@@ -61,6 +62,19 @@ namespace Polyfork.EditorTools
             {
                 var payload = StripDefaults(schema, geometry);
 
+                /* An unmodified asset should arrive as the file the store publishes, not as
+                 * something rebuilt to look like it.
+                 *
+                 * The preview GLB is explicitly not the whole asset - the catalogue says so:
+                 * "hierarchy joined and names removed". Joined is what costs the rig, because
+                 * posing a rigged asset means finding a part BY NAME, and removed names are
+                 * removed handles. Baked animation clips live in the authored file and are
+                 * not in the preview at all. So when the caller may fetch the real thing and
+                 * has changed nothing, fetch the real thing. */
+                var authored = payload.Count == 0 && !NeedsRecolour(schema, slotColors)
+                    ? asset.Download?.Glb
+                    : null;
+
                 /* If something here can build the asset without asking polyfork.dev, use it.
                  *
                  * Importing a remixed FREE asset used to demand a server bake and could be
@@ -68,7 +82,7 @@ namespace Polyfork.EditorTools
                  * rebuilding locally and for nothing on every slider move. The mesh in the
                  * preview and the mesh being imported are the same mesh; only one of them was
                  * being metered. */
-                if (baker is { ConsumesAllowance: false } && baker.CanBake(asset, schema))
+                if (authored == null && baker is { ConsumesAllowance: false } && baker.CanBake(asset, schema))
                 {
                     var local = await ImportFromBakerAsync(baker, asset, schema, geometry, folder, ct);
                     if (local != null) return local;
@@ -76,9 +90,8 @@ namespace Polyfork.EditorTools
                     // Fell through: the local bake could not produce it, so buy it as usual.
                 }
 
-                var url = payload.Count == 0
-                    ? asset.PreviewGlb
-                    : client.RemixGlbUrl(asset.Id, payload);
+                var url = authored
+                          ?? (payload.Count == 0 ? asset.PreviewGlb : client.RemixGlbUrl(asset.Id, payload));
 
                 if (string.IsNullOrEmpty(url))
                 {
@@ -114,6 +127,18 @@ namespace Polyfork.EditorTools
                     else
                     {
                         slots.Apply(slotColors);
+
+                        /* Recolouring means re-exporting, and an export of an instantiated
+                         * hierarchy carries no AnimationClips. Better to say so than to hand
+                         * back a rabbit that has quietly stopped walking. */
+                        var clips = CountAnimations(bytes);
+                        if (clips > 0)
+                        {
+                            Debug.LogWarning(
+                                $"[Polyfork] {asset.Id} has {clips} animation clip(s), and recolouring " +
+                                "re-exports the mesh, which does not carry them. Import it at its " +
+                                "published colours to keep the animation.");
+                        }
 
                         // Same reason as the local path: the recoloured mesh IS its colours.
                         var export = new GameObjectExport(
@@ -288,6 +313,41 @@ namespace Polyfork.EditorTools
             {
                 if (staging != null) UnityEngine.Object.DestroyImmediate(staging);
             }
+        }
+
+        /// <summary>
+        /// Animation clips in a .glb, read from its JSON chunk.
+        ///
+        /// Cheap on purpose: the header sits at a known offset and the answer is one array
+        /// length, so this costs a parse of the metadata rather than a load of the model.
+        /// </summary>
+        static int CountAnimations(byte[] glb)
+        {
+            try
+            {
+                if (glb == null || glb.Length < 20) return 0;
+                if (glb[0] != 'g' || glb[1] != 'l' || glb[2] != 'T' || glb[3] != 'F') return 0;
+
+                var offset = 12;                                   // magic, version, total length
+                while (offset + 8 <= glb.Length)
+                {
+                    var length = (int)BitConverter.ToUInt32(glb, offset);
+                    var type = BitConverter.ToUInt32(glb, offset + 4);
+
+                    if (type == 0x4E4F534A)                        // "JSON"
+                    {
+                        var json = Encoding.UTF8.GetString(glb, offset + 8, length);
+                        return (JObject.Parse(json)["animations"] as JArray)?.Count ?? 0;
+                    }
+
+                    offset += 8 + length;
+                }
+            }
+            catch (Exception)
+            {
+                // A count that cannot be read is not worth failing an import over.
+            }
+            return 0;
         }
 
         /// <summary>

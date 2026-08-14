@@ -5,6 +5,27 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-08-14
+
+### Fixed
+
+- **An unmodified import now fetches the authored GLB, not the preview.** The catalogue is
+  explicit that the preview is not the whole asset — *"hierarchy joined and names removed"* —
+  and joined is what costs the rig, since posing a rigged part means finding it by name.
+  Baked `AnimationClip`s are not in the preview at all. So when nothing has been changed and
+  the caller may fetch the real file, it fetches the real file: named parts, real materials,
+  and the clips.
+
+  Measured on the live catalogue: character previews carry a skin and **zero** animations,
+  while `forest-rabbit-ea2da0`'s download carries `Walk` and self-animating props carry
+  `tick`.
+
+### Added
+
+- **A warning when a recolour is about to drop animation.** Recolouring re-exports the mesh
+  and an export of an instantiated hierarchy carries no clips, so the import now counts them
+  in the source file and says so rather than handing back a rabbit that has stopped walking.
+
 ## [0.8.2] - 2026-08-14
 
 ### Fixed

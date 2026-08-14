@@ -291,6 +291,25 @@ have the frozen mesh.
 At runtime the component does nothing and costs a few bytes, so it is safe to leave on a
 shipped prefab.
 
+## Rigs and animation
+
+Some assets carry more than geometry, and what survives an import depends on what you did to
+it first.
+
+**Imported unchanged, you get the authored file**: named parts, real materials, and any baked
+`AnimationClip` the asset ships. `forest-rabbit-ea2da0` arrives with its `Walk`; self-animating
+props like `steam-plume-f06841` arrive with their `tick`.
+
+**Imported with knobs turned or colours changed, you get a baked mesh.** A remix is rebuilt
+geometry, and a rebuild has no clips to carry — the connector logs a warning when it is about
+to drop one rather than letting it vanish quietly.
+
+**Characters are rigged, not animated.** They ship a skeleton and named joints, and the
+catalogue publishes the handles: `rigged_parts` gives each part an axis and a range, e.g.
+`LeftArm` rotating on `z` from 0 to -55 degrees. They are built to be posed and driven by your
+own animation, not to arrive playing something. Nothing is missing when a character imports
+without clips — there were none.
+
 ## Exporting to FBX
 
 There is no FBX button here on purpose. Assets import as `.glb`, which glTFast turns into a
