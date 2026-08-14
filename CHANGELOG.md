@@ -5,6 +5,26 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-08-14
+
+### Added
+
+- **Imported assets stay editable in the scene.** Importing now also writes a prefab beside
+  the `.glb` carrying a `PolyforkAssetLink`: the asset id and the knob values, as JSON. Drag
+  the prefab in and the Inspector shows the knobs, with a **Rebuild** button that changes the
+  model in place.
+
+  Rebuilding replaces the meshes on the object, so its transform, children, colliders and
+  anything else attached survive a knob change. It uses the same baker as the gallery, so
+  with a local engine installed an Inspector rebuild costs nothing either.
+
+  A prefab rather than the `.glb` because an imported model is rebuilt from its file on every
+  import and a component added to it is discarded — the prefab is the only thing that can
+  carry state. Previously an import froze a model: changing your mind meant finding the asset
+  again, guessing the slider positions, importing a second copy and swapping it by hand.
+- `PolyforkKnobValues.FromJson`, the inverse of `ToJson`. The round trip is what lets a value
+  set outlive the window that made it.
+
 ## [0.7.1] - 2026-08-13
 
 ### Fixed

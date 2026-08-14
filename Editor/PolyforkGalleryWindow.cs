@@ -1408,12 +1408,17 @@ namespace Polyfork.EditorTools
 
             if (result.Success)
             {
-                _importMessage = result.ColorsBaked
-                    ? $"Imported to {result.AssetPath} with your colours baked in."
-                    : $"Imported to {result.AssetPath}.";
+                /* Point at the prefab, not the .glb. The prefab is the one carrying the
+                 * knob values, so it is the one worth dragging into a scene - drop the .glb
+                 * instead and the model is frozen the moment it lands. */
+                _importMessage = result.PrefabPath != null
+                    ? $"Imported to {result.PrefabPath}. Drag it in - its knobs stay editable in the Inspector."
+                    : result.ColorsBaked
+                        ? $"Imported to {result.AssetPath} with your colours baked in."
+                        : $"Imported to {result.AssetPath}.";
                 _importMessageType = MessageType.Info;
 
-                var obj = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(result.AssetPath);
+                var obj = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(result.PrefabPath ?? result.AssetPath);
                 if (obj != null) EditorGUIUtility.PingObject(obj);
             }
             else

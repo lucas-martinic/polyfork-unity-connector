@@ -31,6 +31,10 @@ namespace Polyfork.EditorTools
             public string Error;
             public bool ColorsBaked;
 
+            /// <summary>The prefab carrying the knob values, or null if one could not be
+            /// written. This is the thing to drag into a scene.</summary>
+            public string PrefabPath;
+
             /// <summary>Set when the failure was a 429, so callers can offer the key prompt.</summary>
             public bool RateLimited;
             public TimeSpan RetryAfter;
@@ -136,6 +140,7 @@ namespace Polyfork.EditorTools
 
                 result.Success = true;
                 result.AssetPath = assetPath;
+                result.PrefabPath = SavePrefab(assetPath, asset, geometry);
                 return result;
             }
             catch (OperationCanceledException)
@@ -158,6 +163,54 @@ namespace Polyfork.EditorTools
             finally
             {
                 if (staging != null) UnityEngine.Object.DestroyImmediate(staging);
+            }
+        }
+
+
+        /// <summary>
+        /// Saves a prefab beside the .glb carrying a PolyforkAssetLink, and returns its path.
+        ///
+        /// A .glb lands in the project as an imported model, and an imported model is not
+        /// something a component can be added to - Unity rebuilds it from the file on every
+        /// import, so anything attached is discarded. A prefab wrapping it is the standard
+        /// answer, and it is the prefab that carries the knob values, which is what makes an
+        /// asset still editable after it has been dropped into a scene.
+        ///
+        /// Best effort: a failure here costs the Inspector knobs, not the import.
+        /// </summary>
+        static string SavePrefab(
+            string glbPath, PolyforkAsset asset, PolyforkKnobValues values)
+        {
+            GameObject instance = null;
+            try
+            {
+                var model = AssetDatabase.LoadAssetAtPath<GameObject>(glbPath);
+                if (model == null) return null;
+
+                instance = UnityEngine.Object.Instantiate(model);
+                instance.name = model.name;
+
+                var link = instance.AddComponent<PolyforkAssetLink>();
+                link.assetId = asset.Id;
+                link.title = asset.Title;
+                link.page = asset.Page;
+                link.knobValues = values?.ToString() ?? "{}";
+
+                var prefabPath = Path.ChangeExtension(glbPath, ".prefab");
+                prefabPath = AssetDatabase.GenerateUniqueAssetPath(prefabPath);
+
+                var saved = PrefabUtility.SaveAsPrefabAsset(instance, prefabPath, out var ok);
+                return ok && saved != null ? prefabPath : null;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Polyfork] could not write a prefab for {asset.Id} ({e.Message}); " +
+                                 "the .glb imported fine, it just has no knobs in the Inspector.");
+                return null;
+            }
+            finally
+            {
+                if (instance != null) UnityEngine.Object.DestroyImmediate(instance);
             }
         }
 
@@ -205,7 +258,14 @@ namespace Polyfork.EditorTools
                 if (!await export.SaveToFileAndDispose(assetPath, ct)) return null;
 
                 AssetDatabase.ImportAsset(assetPath);
-                return new Result { Success = true, AssetPath = assetPath, ColorsBaked = true };
+
+                return new Result
+                {
+                    Success = true,
+                    AssetPath = assetPath,
+                    ColorsBaked = true,
+                    PrefabPath = SavePrefab(assetPath, asset, values)
+                };
             }
             catch (OperationCanceledException)
             {

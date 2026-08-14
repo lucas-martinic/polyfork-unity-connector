@@ -267,6 +267,26 @@ if (remixable.IsMorphable("width")) {
 }
 ```
 
+## Still editable after you drop it in a scene
+
+Importing writes two files: the `.glb`, and a **prefab beside it carrying a
+`PolyforkAssetLink`**. Drag the prefab in and the Inspector keeps the asset's knobs — move a
+slider, press **Rebuild**, and the model changes in place.
+
+Rebuilding replaces the meshes on the object, so its transform, its children, its colliders
+and anything else you attached survive the change. The knob values are stored on the
+component as JSON, so they outlive the window that made them: a month later the fence is
+still one section away from being longer, rather than a mesh whose settings nobody wrote
+down.
+
+Why a prefab rather than the `.glb` itself: an imported model is rebuilt from the file on
+every import, so a component added to it is discarded. The prefab is the thing that can
+carry state. The `.glb` is still there and still a normal Unity asset if you would rather
+have the frozen mesh.
+
+At runtime the component does nothing and costs a few bytes, so it is safe to leave on a
+shipped prefab.
+
 ## Exporting to FBX
 
 There is no FBX button here on purpose. Assets import as `.glb`, which glTFast turns into a

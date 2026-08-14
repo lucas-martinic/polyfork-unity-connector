@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
@@ -134,6 +135,42 @@ namespace Polyfork
                 }
             }
             return filtered;
+        }
+
+        /// <summary>
+        /// Reads back what ToJson wrote.
+        ///
+        /// The round trip is what lets a value set outlive the window that made it - stored
+        /// on an imported prefab, reopened a month later and turned again. Types come from
+        /// the JSON itself rather than from a schema, so a choice stays the string it was
+        /// published as, which is the distinction the remix endpoint compares on.
+        /// </summary>
+        public static PolyforkKnobValues FromJson(string json)
+        {
+            var values = new PolyforkKnobValues();
+            if (string.IsNullOrWhiteSpace(json)) return values;
+
+            JObject root;
+            try { root = JObject.Parse(json); }
+            catch (Exception) { return values; }   // a corrupt record reads as "no overrides"
+
+            foreach (var p in root.Properties())
+            {
+                switch (p.Value.Type)
+                {
+                    case JTokenType.Integer:
+                    case JTokenType.Float:
+                        values.SetNumber(p.Name, p.Value.Value<float>());
+                        break;
+                    case JTokenType.Boolean:
+                        values.SetBool(p.Name, p.Value.Value<bool>());
+                        break;
+                    case JTokenType.String:
+                        values.SetChoice(p.Name, p.Value.Value<string>());
+                        break;
+                }
+            }
+            return values;
         }
 
         /// <summary>The `p=` payload: a JSON object of knob name to value.</summary>
