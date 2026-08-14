@@ -20,7 +20,19 @@ namespace Polyfork
     /// </summary>
     public sealed class PolyforkPuertsRuntime : IPolyforkJsRuntime
     {
+        /* Puerts 3.x marks JsEnv obsolete in favour of ScriptEnv, and this deliberately stays
+         * on JsEnv. It is not a rename: its constructor checks the native papi version against
+         * the one this managed code expects, and calls PuertsNative.SetLogCallback, which is
+         * what puts a JS console.log and a JS exception into Unity's Console. Constructing a
+         * ScriptEnv directly skips both, so the warning would be traded for silent JS errors
+         * and a version mismatch that surfaces as a crash instead of a message.
+         *
+         * Suppressed here rather than project-wide, and only around the two lines that need it,
+         * so the day this type actually goes away we get told. */
+#pragma warning disable 618
         JsEnv _env;
+#pragma warning restore 618
+
         Func<string, string, string> _bake;
         Func<string, string> _describe;
         Func<string, bool> _has;
@@ -56,7 +68,9 @@ namespace Polyfork
                     throw new InvalidOperationException(problem);
 
                 step = "creating the QuickJS environment";
+#pragma warning disable 618
                 _env = new JsEnv(loader, -1, BackendType.QuickJS, IntPtr.Zero, IntPtr.Zero);
+#pragma warning restore 618
 
                 // QuickJS has no btoa; the bridge base64-encodes its buffers with it.
                 step = "evaluating the base64 polyfill";

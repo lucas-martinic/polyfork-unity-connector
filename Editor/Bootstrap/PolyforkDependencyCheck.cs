@@ -26,25 +26,38 @@ namespace Polyfork.EditorTools
     /// </summary>
     static class PolyforkDependencyCheck
     {
-        // asmdef names, which are also the assembly names our asmdefs reference.
-        static readonly (string Assembly, string Package, string Why)[] Required =
+        static readonly (string Package, string Why)[] Required =
         {
-            ("glTFast", "com.unity.cloud.gltfast",
+            ("com.unity.cloud.gltfast",
              "reads and writes the .glb files models arrive as"),
-            ("Unity.Nuget.Newtonsoft-Json", "com.unity.nuget.newtonsoft-json",
+            ("com.unity.nuget.newtonsoft-json",
              "parses the catalogue and each model's parameter schema"),
         };
 
         [InitializeOnLoadMethod]
         static void Check()
         {
-            // After a compile failure Unity still reloads the domain, so this runs on the pass
-            // where our other assemblies are absent - which is exactly when it is needed.
-            var loaded = AppDomain.CurrentDomain.GetAssemblies()
-                .Select(a => a.GetName().Name)
+            /* Ask the package manager, not the loaded assemblies.
+             *
+             * This checked AppDomain assembly names against the names our asmdefs reference,
+             * which is a different question and gets a different answer: the Newtonsoft package
+             * ships its code as a precompiled `Newtonsoft.Json` assembly, so the asmdef
+             * reference `Unity.Nuget.Newtonsoft-Json` resolves at compile time while no
+             * assembly by that name is ever loaded. The result was this error firing on a
+             * perfectly good install, which is worse than not checking at all - it tells a user
+             * their working project is broken. Package names are what the message asks them to
+             * install, so they are also what it should look for. */
+            // Fully qualified: `PackageInfo` is not a unique name across Unity's namespaces,
+            // and an ambiguous reference here costs a round trip to find out.
+            var installed = UnityEditor.PackageManager.PackageInfo.GetAllRegisteredPackages()
+                .Select(p => p.name)
                 .ToHashSet(StringComparer.Ordinal);
 
-            var missing = Required.Where(r => !loaded.Contains(r.Assembly)).ToArray();
+            // Nothing registered yet: too early to conclude anything, and a false alarm here is
+            // the exact failure being fixed.
+            if (installed.Count == 0) return;
+
+            var missing = Required.Where(r => !installed.Contains(r.Package)).ToArray();
             if (missing.Length == 0) return;
 
             var list = string.Join("\n", missing.Select(m => $"    {m.Package}   ({m.Why})"));
@@ -52,10 +65,11 @@ namespace Polyfork.EditorTools
             Debug.LogError(
                 "[Polyfork] Missing required packages, so the connector cannot compile:\n\n"
                 + list
-                + "\n\nInstall them with Window > Package Manager > + > Install package by name, "
-                + "then paste each name above. Both come from Unity's own registry and are free.\n\n"
-                + "You are seeing this because the .unitypackage format carries no dependency "
-                + "information. Installing from the git URL instead resolves both automatically:\n"
+                + "\n\nInstall each with Window > Package Manager > + > Install package by name. "
+                + "They come from Unity's own registry and are free.\n\n"
+                + "A .unitypackage carries no dependency information, which is the usual reason "
+                + "for this. Package Manager installs - the Asset Store or the git URL - read "
+                + "them from the manifest and resolve both on their own:\n"
                 + "    https://github.com/lucas-martinic/polyfork-unity-connector.git");
         }
     }

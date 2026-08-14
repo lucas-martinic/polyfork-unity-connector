@@ -264,6 +264,18 @@ def build(version: str) -> int:
         native_bytes += f.stat().st_size
         copied += 1
 
+    # ---- warning suppression for the vendored assembly ----------------------
+    #
+    # Upstream compiles with warnings (an unused catch variable in JsEnv, an unused field in
+    # PathHelper) and the Asset Store expects a submission to compile clean. The choice is
+    # editing vendored source or silencing those warnings for this assembly alone, and a
+    # csc.rsp beside the asmdef does the second: Unity applies it to that assembly only, so
+    # our own code keeps every warning it had. Editing the source would have been the first
+    # step towards a fork nobody signed up to maintain.
+    (DEST / "csc.rsp").write_text("-nowarn:0168\n-nowarn:0414\n-nowarn:0219\n-nowarn:0649\n",
+                                  encoding="utf-8")
+    default_meta(DEST / "csc.rsp", "csc.rsp", folder=False)
+
     # ---- assembly definition and licence ------------------------------------
     (DEST / "Polyfork.Puerts.asmdef").write_text(ASMDEF, encoding="utf-8")
     write_meta(DEST / "Polyfork.Puerts.asmdef",

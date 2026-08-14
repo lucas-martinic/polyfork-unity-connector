@@ -5,6 +5,34 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.1] - 2026-08-14
+
+### Fixed
+
+- **The dependency check cried wolf on a working install.** It compared AppDomain assembly
+  names against the names our asmdefs reference, which is a different question with a different
+  answer: `com.unity.nuget.newtonsoft-json` ships its code as a precompiled `Newtonsoft.Json`
+  assembly, so the asmdef reference `Unity.Nuget.Newtonsoft-Json` resolves at compile time while
+  no assembly by that name is ever loaded. A correctly installed project was told it was broken,
+  which is worse than not checking at all.
+
+  It asks the package manager now, for the package names it tells you to install, and says
+  nothing when no packages are registered yet.
+
+### Changed
+
+- **The submission compiles clean.** Vendored PuerTS carries two warnings of its own, an unused
+  catch variable in `JsEnv` and an unused field in `PathHelper`, and the Asset Store expects a
+  submission without them. A `csc.rsp` beside the vendored asmdef silences them for **that
+  assembly only**, so our own code keeps every warning it had. The alternative was editing
+  vendored source, which is the first step towards a fork nobody signed up to maintain.
+
+- Our two `JsEnv` obsolete warnings are suppressed at the two lines that raise them, and the
+  reason is written next to them: `ScriptEnv` is not a rename. `JsEnv`'s constructor checks the
+  native papi version against what the managed code expects and calls
+  `PuertsNative.SetLogCallback`, which is what puts a JS `console.log` or exception into Unity's
+  Console. Constructing a `ScriptEnv` directly would trade a warning for silent JS errors.
+
 ## [0.14.0] - 2026-08-14
 
 ### Changed
