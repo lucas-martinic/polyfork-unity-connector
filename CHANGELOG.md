@@ -5,6 +5,19 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-08-14
+
+### Added
+
+- **`Polyfork ▸ Update Package`.** Checks the published version first and says so when you
+  are already on it, rather than costing a domain reload to reinstall an identical commit.
+
+  Updating clears this package's entry from `Packages/packages-lock.json` before re-adding
+  the URL. That entry is why a git package goes stale: UPM records the exact commit it
+  resolved and keeps using it, so re-adding the same URL resolves to the same commit and
+  nothing appears to happen. Unity's own advice — remove the package and install it again —
+  is the same operation with more steps and less certainty that you are allowed to.
+
 ## [0.10.1] - 2026-08-14
 
 ### Fixed

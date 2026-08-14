@@ -39,6 +39,17 @@ Or by hand, which also lets you pin a version with `#v0.2.0`:
 
 Unity 6000.0 or newer. The two dependencies are resolved from Unity's own registry.
 
+## Updating
+
+A package installed from a git URL does not update on its own. **Polyfork ▸ Update Package**
+checks the published version, tells you if you are already on it, and pulls the newest one if
+not.
+
+It has to clear this package's entry from `Packages/packages-lock.json` to do it: UPM records
+the exact commit it resolved and honours it afterwards, so re-adding the same URL resolves to
+the same commit and nothing appears to happen. Unity's own advice is to remove the package and
+install it again, which is the same operation with more steps.
+
 ## Menu
 
 ```
@@ -46,6 +57,7 @@ Polyfork ▸ Browse Assets                          Ctrl/Cmd + Shift + P
 Polyfork ▸ API Key…
 Polyfork ▸ Welcome
 Polyfork ▸ Setup                                  install a JS engine for instant bakes
+Polyfork ▸ Update Package                         pull the newest version from GitHub
 Polyfork ▸ Diagnostics ▸ Smoke-test local baking  (needs a JS engine)
 ```
 
