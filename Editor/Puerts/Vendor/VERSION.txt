@@ -1,0 +1,5 @@
+PuerTS 3.0.2
+https://github.com/Tencent/puerts/releases/tag/Unity_v3.0.2
+
+Vendored by Tools~/vendor-puerts.py - do not edit by hand.
+Managed source is verbatim; only the assembly name and platform settings differ.

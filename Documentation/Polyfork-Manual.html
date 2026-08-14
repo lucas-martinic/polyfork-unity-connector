@@ -32,7 +32,7 @@
 <div class="wrap">
 
 <h1>Polyfork for Unity</h1>
-<p class="sub">Offline documentation for version 0.11.x. Browse, remix and import 3D assets
+<p class="sub">Offline documentation for version 0.12.x. Browse, remix and import 3D assets
 without leaving the editor.</p>
 
 <div class="toc">
@@ -44,7 +44,7 @@ without leaving the editor.</p>
     <li><a href="#s5">Importing</a></li>
     <li><a href="#s6">Editing a model after it is in the scene</a></li>
     <li><a href="#s7">Characters, rigs and animation</a></li>
-    <li><a href="#s8">Instant local rebuilds (optional)</a></li>
+    <li><a href="#s8">Instant local rebuilds</a></li>
     <li><a href="#s9">Accounts, the free tier and API keys</a></li>
     <li><a href="#s10">Scripting reference</a></li>
     <li><a href="#s11">Troubleshooting</a></li>
@@ -125,14 +125,23 @@ curves encode the source skeleton's proportions and would pull a differently-siz
 That suits <code>applyRootMotion = false</code>, which the importer sets — you move the
 character, the clip poses it.</p>
 
-<h2 id="s8">8. Instant local rebuilds (optional)</h2>
-<p>By default a parameter change asks polyfork.dev to rebuild the mesh: roughly 120 ms, and it
-counts against an hourly allowance. Install a JavaScript engine and the editor runs the
-model's own program instead — instant, and it spends nothing.</p>
-<p><strong>Polyfork ▸ Setup</strong> explains the steps and reports when it has worked. It is
-editor-only: neither the engine nor its scripts can reach a player build.</p>
+<h2 id="s8">8. Instant local rebuilds</h2>
+<p>A parameter change can be rebuilt two ways. On the server it takes roughly 120 ms and counts
+against an hourly allowance. In the editor it is instant and costs nothing, because the editor
+runs the model's own program itself.</p>
+<p><strong>Nothing needs installing.</strong> The engine is QuickJS, via PuerTS, vendored into
+this package. Drag a slider and the geometry rebuilds as you drag.</p>
+<p>It is editor-only and desktop-only: Windows, macOS (universal, so Apple Silicon is covered)
+and Linux on x64. The assembly is marked Editor-only and so is every native library, so none of
+it reaches a player build and a shipped game keeps using the server.
+<strong>Polyfork ▸ Setup</strong> reports whether the engine started and what to check if it
+did not.</p>
 <div class="note">Rigged models always rebuild on the server, because the trimmed geometry
 library used locally omits the skinning classes.</div>
+<div class="note"><strong>Upgrading from 0.11 or earlier:</strong> remove
+<code>com.tencent.puerts.core</code> and <code>com.tencent.puerts.quickjs</code> from the
+project. Unity refuses to import two native plugins with the same file name, so the project
+will not compile while both copies are present. Polyfork ▸ Setup detects this and says so.</div>
 
 <h2 id="s9">9. Accounts, the free tier and API keys</h2>
 <p>No account is needed to browse, preview, remix or import free models — about half the

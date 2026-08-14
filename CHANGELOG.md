@@ -5,6 +5,59 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-08-14
+
+### Changed
+
+- **Local baking needs no setup: the JavaScript engine ships inside the package.** PuerTS on
+  QuickJS is vendored into `Editor/Puerts/Vendor/` by `Tools~/vendor-puerts.py`. Import the
+  package and instant rebuilds are on.
+
+  This started as an Asset Store problem. Rule 2.5.1.e reads *"Offerings must not
+  programmatically add, update, or remove packages in user projects, except for packages
+  included in the offering's own Asset Store product"* — and unlike 2.5.1.d next to it, it
+  carries no exception for user consent, so a button the user chose to press was never a
+  defence. The one-button installer had to go either way.
+
+  Meta's XR SDK looks like a counterexample and is the opposite of one. Its All-in-One package
+  pulls in eight dependencies and every one is `com.meta.*`: Meta's own packages, all in the
+  same offering, **declared** in `package.json` rather than installed by a script. The tell is
+  the Meta XR Simulator, the one piece that is not a dependency and must be installed
+  separately, precisely because it is not part of that offering. The rule is declare, don't
+  install, and you may only declare Unity's packages or your own. So PuerTS became ours.
+
+  What is vendored is deliberately less than the whole engine, because PuerTS is built to ship
+  a runtime to players and this one must never reach a build:
+
+  | | |
+  | --- | --- |
+  | Managed source | verbatim, unedited — PuerTS resolves its own backends by string (`GetType("Puerts.BackendQuickJS")`) and its bootstrap calls `CS.Puerts.Utils`, so a namespace rename would break at run time rather than at compile time. The **assembly** is renamed to `Polyfork.Puerts` instead, which needs no edits. |
+  | Natives | desktop x64 only: Windows, Linux, and a universal macOS build that covers Apple Silicon. Every one marked Editor-only. |
+  | Dropped | Android, iOS, WebGL and OpenHarmony binaries (37 MB for platforms an editor-only feature cannot run on), the WSPPAddon websocket library (3.5 MB, referenced by nothing but its own P/Invoke declaration), and the IL2CPP wrapper generator with the ScriptedImporters that would have claimed `.mjs`, `.cjs` and `.lua` project-wide for every user. |
+
+  Net 4.4 MB of native, 4.9 MB in total.
+
+- `Polyfork ▸ Setup` is a status page rather than an installer: whether the engine started,
+  and what to check when it did not.
+
+### Removed
+
+- The one-button PuerTS installer, the tarball reader that supported it, and roughly 400 lines
+  of download, unpack and retry handling. There is nothing left to install.
+
+### Upgrading
+
+- **Remove `com.tencent.puerts.core` and `com.tencent.puerts.quickjs`** from any project that
+  has them, along with a `PuerTS` folder beside `Assets` if an older setup window left one.
+  Unity refuses to import two native plugins sharing a file name, so a project carrying both
+  copies will not compile. `Polyfork ▸ Setup` detects this and says exactly what to remove.
+
+### Fixed
+
+- `Third Party Notices.md` gave PuerTS's licence as MIT. It is **BSD 3-Clause**. The full text
+  is now reproduced there and shipped verbatim at `Editor/Puerts/Vendor/LICENSE-PuerTS.txt`,
+  which is what clause 2 asks of a binary redistribution.
+
 ## [0.11.6] - 2026-08-14
 
 ### Fixed

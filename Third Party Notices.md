@@ -47,9 +47,42 @@ SOFTWARE.
 
 ## PuerTS
 
-PuerTS is **not** redistributed here. The Local Baking sample compiles against
-it only when you install it yourself, and the package compiles and runs without
-it. It is listed for completeness because the sample names it as a prerequisite.
+PuerTS **is** redistributed here, in `Editor/Puerts/Vendor/`: the managed sources verbatim,
+its JavaScript bootstrap, and the QuickJS and PuerTS core native libraries for desktop
+editors (Windows, macOS universal, Linux, x64). It powers instant local rebuilds. Android,
+iOS, WebGL and OpenHarmony binaries are not included, and neither is the IL2CPP wrapper
+generator, because the engine is editor-only and cannot reach a player build.
+
+The assembly is renamed to `Polyfork.Puerts` and is not auto-referenced; the C# namespace is
+untouched. `Tools~/vendor-puerts.py` reproduces the vendored tree from upstream release
+archives and documents what is taken and left.
 
 Homepage: https://github.com/Tencent/puerts
-Licence: MIT, Copyright (c) 2020 Tencent
+Version: 3.0.2
+Licence: **BSD 3-Clause**, Copyright (C) 2020 Tencent. All rights reserved.
+
+The full licence, including the third-party components PuerTS itself carries, is reproduced
+verbatim at `Editor/Puerts/Vendor/LICENSE-PuerTS.txt`, which is what clause 2 asks of a
+binary redistribution:
+
+> Redistribution and use in source and binary forms, with or without modification, are
+> permitted provided that the following conditions are met:
+>
+> 1. Redistributions of source code must retain the above copyright notice, this list of
+>    conditions and the following disclaimer.
+> 2. Redistributions in binary form must reproduce the above copyright notice, this list of
+>    conditions and the following disclaimer in the documentation and/or other materials
+>    provided with the distribution.
+> 3. Neither the name of the copyright holder nor the names of its contributors may be used
+>    to endorse or promote products derived from this software without specific prior written
+>    permission.
+>
+> THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS
+> OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+> MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+> COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+> EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+> SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+> HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR
+> TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+> SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

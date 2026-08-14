@@ -1,40 +1,61 @@
 # Asset Store submission
 
-Everything needed to submit this package. The pricing and licensing questions are settled
-(free, pack kept); one technical blocker remains and is handled by a build script.
+Everything needed to submit this package. Pricing and licensing are settled (free, pack kept),
+and the policy blockers are resolved: the JavaScript engine is vendored rather than installed,
+and the one remaining menu item that touches packages is stripped by a build script that then
+proves it stripped it.
 
 ---
 
 ## 1. Blockers
 
-### 1a. Programmatic package installation — **must be removed**
+### 1a. Programmatic package installation — **handled**
 
-> *"Submissions do not contain any scripts that, upon import and at any other point,
-> automatically and/or without user consent redirect users outside the Unity Editor [or]
-> programmatically add, update, or remove packages in user projects, except for packages
-> included in the offering's own Asset Store product."*
+Quote the two clauses separately, because running them together is how this was misread the
+first time:
+
+> **2.5.1.d** *"Submissions do not contain any scripts that, upon import and at any other
+> point, automatically and/or without user consent redirect users outside the Unity Editor,
+> such as a website or other hyperlinks/deep links."*
+>
+> **2.5.1.e** *"Offerings must not programmatically add, update, or remove packages in user
+> projects, except for packages included in the offering's own Asset Store product."*
 > — [Submission Guidelines](https://assetstore.unity.com/publishing/submission-guidelines)
 
-Two features break this, and both are correct behaviour for a git-installed package:
+"Automatically and/or without user consent" qualifies **d**, not **e**. A button the user
+chose to press is a fine answer to d and no answer at all to e.
 
-| Feature | What it does | Why it fails |
-| --- | --- | --- |
-| *Install PuerTS for me* | `Client.AddAndRemove` on two third-party packages | Adds packages that are not part of this product |
-| `Polyfork ▸ Update Package` | Rewrites `packages-lock.json`, re-adds this package | Manipulates packages; the store handles updates anyway |
+**Meta's XR SDK is not the counterexample it looks like.** Its All-in-One package pulls in
+eight dependencies — Core, Audio, Haptics, Interaction Essentials, Interaction, Platform,
+Voice, MR Utility Kit — and every one is `com.meta.*`: Meta's own packages, all part of the
+same Asset Store offering, **declared** in `package.json` and resolved by Package Manager. No
+Meta editor script calls the Package Manager API. The tell is the Meta XR Simulator, the one
+piece that is *not* a dependency and must be installed separately, precisely because it is not
+in that offering.
 
-**Handled.** `Tools~/make-store-package.py` produces the store variant from this source:
-it drops those files, cuts the regions marked `// <store-strip>`, then *searches the result*
-for `Client.Add`, `Client.AddAndRemove`, `packages-lock.json` and any orphaned reference the
-strip left behind, and exits non-zero if it finds one. Run it and read the output — a build
-that merely believes it complied is worth nothing when the cost of being wrong is a two-week
-review round trip.
+So the rule is **declare, don't install**, and 5.2.c limits what you may declare to *"Unity
+packages or other packages already included in the same published product"*. PuerTS is
+Tencent's, which closes both doors — and leaves the third: make it ours.
+
+| Feature | Resolution |
+| --- | --- |
+| *Install PuerTS for me* | **Gone.** The engine is vendored into the package (`Tools~/vendor-puerts.py`), so there is nothing to install and nothing to ask permission for. |
+| `Polyfork ▸ Update Package` | **Stripped from the store build.** Wrong twice over there: the store delivers its own updates, and a store install lands in `Assets/Polyfork/` where there is no package to update, so it would fetch a second copy alongside the imported files. |
+
+`Tools~/make-store-package.py` drops that file, cuts any region marked `// <store-strip>`,
+then *searches the result* for `Client.Add`, `Client.AddAndRemove`, `packages-lock.json` and
+any orphaned reference the strip left behind, and exits non-zero if it finds one. Run it and
+read the output — a build that merely believes it complied is worth nothing when the cost of
+being wrong is a two-week review round trip.
 
 ```bash
 python3 "Tools~/make-store-package.py" ../polyfork-store-build
 ```
 
-The setup window survives, minus the button: it still explains what PuerTS gives you and
-opens the releases page when clicked, which is user-initiated and allowed.
+What is vendored is deliberately less than the whole engine: desktop x64 natives only (4.4 MB,
+all marked Editor-only), managed source verbatim, and none of the Android/iOS/WebGL binaries,
+the websocket addon, or the IL2CPP generator. `Third Party Notices.md` carries the BSD 3-Clause
+notice, which is what clause 2 asks of a binary redistribution.
 
 ### 1b. The animation clips — **decided: keep them, ship free**
 
@@ -189,8 +210,8 @@ Each release carries **two**, and the difference is only the store's policy stri
 
 | File | For | Contains |
 | --- | --- | --- |
-| `Polyfork.unitypackage` | everyone | everything, including `Polyfork ▸ Update Package` and the one-button PuerTS installer |
-| `Polyfork-AssetStore.unitypackage` | the submission | the same, minus the two features that add or update packages programmatically |
+| `Polyfork.unitypackage` | everyone | everything, including `Polyfork ▸ Update Package` |
+| `Polyfork-AssetStore.unitypackage` | the submission | the same, minus that one menu item |
 
 Both carry `Demo/` and `Documentation/`, so validating either gives the same answer. Upload the
 `-AssetStore` one; the policy strip is the whole reason it exists.

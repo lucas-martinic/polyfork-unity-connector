@@ -1,4 +1,3 @@
-#if POLYFORK_PUERTS
 using System;
 using System.Collections.Generic;
 using Puerts;
@@ -44,14 +43,20 @@ namespace Polyfork
              * script as "String reference not set to an instance of a String. Parameter
              * name: s" - that is Encoding.UTF8.GetBytes(chunk) inside ScriptEnv.Eval - and
              * on its own that message identifies neither the script nor the step. */
-            var step = "creating the QuickJS environment";
+            var step = "locating the JavaScript bootstrap";
             try
             {
-                // DefaultLoader, not a null one: Puerts hands the loader to its backend, and
-                // a loader that answers nothing can fail inside native before our code runs.
-                // We never ask it for anything ourselves - every script the connector runs is
-                // evaluated from a string.
-                _env = new JsEnv(new DefaultLoader(), -1, BackendType.QuickJS, IntPtr.Zero, IntPtr.Zero);
+                /* Our own loader, not Puerts's DefaultLoader: that one reads through
+                 * Resources.Load, and the bootstrap is deliberately not in a Resources folder
+                 * - see PolyforkPuertsLoader for why. Checked before the engine is built,
+                 * because a loader that answers nothing fails inside native, and native
+                 * reports it as a null string with no filename attached. */
+                var loader = new PolyforkPuertsLoader();
+                if (!loader.Verify(out var problem))
+                    throw new InvalidOperationException(problem);
+
+                step = "creating the QuickJS environment";
+                _env = new JsEnv(loader, -1, BackendType.QuickJS, IntPtr.Zero, IntPtr.Zero);
 
                 // QuickJS has no btoa; the bridge base64-encodes its buffers with it.
                 step = "evaluating the base64 polyfill";
@@ -163,4 +168,3 @@ globalThis.__btoa = function (input) {
 
     }
 }
-#endif

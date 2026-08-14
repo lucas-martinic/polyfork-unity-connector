@@ -208,11 +208,9 @@ if (remixable.IsMorphable("tallness")) {
 }
 ```
 
-Local baking runs the asset's own `createAsset()` module in-process via PuerTS/QuickJS.
-It is shipped as the optional **Local Baking** sample rather than in the package, because
-it carries a trimmed three.js build that would otherwise land in every consumer's player
-build whether or not they use it. Import it only if you need it — see that sample's README
-for the full trade-off.
+Local baking runs the asset's own `createAsset()` module in-process on QuickJS, in the
+editor. It needs no setup: the engine ships inside the package, editor-only, so it never
+reaches a player build.
 
 ## Types
 
@@ -240,26 +238,25 @@ it counts against your hourly allowance. Install a JavaScript engine and the edi
 asset's **own `createAsset()` module** instead — the same program the store runs — so a
 slider costs CPU rather than a request.
 
-**Polyfork ▸ Setup** has an *Install PuerTS for me* button that downloads a
-matched pair and adds both to the project. It asks first, and tells you what it is about to
-fetch and from where.
+**There is nothing to install.** The engine is PuerTS on QuickJS, vendored into the package
+under `Editor/Puerts/Vendor/` (BSD 3-Clause; see `Third Party Notices.md`). Drag a slider and
+the geometry rebuilds as you drag. **Polyfork ▸ Setup** reports whether it started and what to
+check if it did not.
 
-By hand instead:
+It is editor-only and desktop-only: Windows, macOS (universal, so Apple Silicon included) and
+Linux on x64. The assembly declares `includePlatforms: ["Editor"]` and every native library is
+marked Editor-only, so a player build gets none of it — which is the point, since a shipped
+game keeps using the server baker.
 
-1. From one PuerTS release, download **both** `PuerTS_Core_<version>` and
-   `PuerTS_Quickjs_<version>`: <https://github.com/Tencent/puerts/releases>
-2. **Window ▸ Package Manager ▸ + ▸ Add package from tarball…** for each.
+The gallery picks the local baker up automatically and stops reporting a remaining-bakes count
+once it has: with a local engine the allowance only governs assets whose module this connection
+cannot fetch, which are the ones you could not import anyway.
 
-> **Take both from the same release.** `com.tencent.puerts.quickjs` depends on an exact
-> `com.tencent.puerts.core` version. OpenUPM carries only the core, at a different version,
-> so the obvious route installs cleanly and then never works. The setup window checks the
-> installed versions and says so if they disagree.
-
-The gallery picks the local baker up automatically, and stops reporting a remaining-bakes
-count once it has: with a local engine the allowance only governs assets whose module this
-connection cannot fetch, which are the ones you could not import anyway. Without the engine the connector keeps
-using the server exactly as before — the assembly that binds to PuerTS is gated on the
-package being present, so its absence is not a broken state, just a slower one.
+> **Upgrading from 0.11 or earlier?** Remove `com.tencent.puerts.core` and
+> `com.tencent.puerts.quickjs` from your project, and delete the `PuerTS` folder beside
+> `Assets` if an older setup window left one. Unity refuses to import two native plugins with
+> the same file name, so the project will not compile while both copies are present.
+> **Polyfork ▸ Setup** detects this and says so.
 
 Two things worth knowing:
 

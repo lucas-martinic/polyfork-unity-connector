@@ -1,4 +1,3 @@
-#if POLYFORK_PUERTS
 using UnityEditor;
 
 namespace Polyfork
@@ -6,10 +5,11 @@ namespace Polyfork
     /// <summary>
     /// Advertises the QuickJS runtime to the core assembly.
     ///
-    /// This assembly only compiles when Puerts is installed, so registering from here is
-    /// what makes local baking appear automatically without the connector ever referencing
-    /// the engine. Removing the Puerts packages removes this file from the build, the
-    /// factory is never set, and everything falls back to the server baker.
+    /// The registration still points inwards even though the engine now ships inside this
+    /// package: the core assembly never references Puerts, this one does, and it hands over
+    /// a factory at load. That kept local baking optional when the engine was two packages
+    /// the user installed, and it keeps the engine swappable now that it is vendored - the
+    /// baker asks the provider for a runtime and does not know or care what answers.
     /// </summary>
     public static class PolyforkPuertsBootstrap
     {
@@ -28,4 +28,3 @@ namespace Polyfork
         }
     }
 }
-#endif

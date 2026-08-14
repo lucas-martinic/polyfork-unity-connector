@@ -1,20 +1,25 @@
 #!/usr/bin/env python3
 """Builds the Asset Store variant of this package, and proves it is one.
 
-Two of the Asset Store's submission rules bite this package as it ships on GitHub:
+One Asset Store rule bites this package as it ships on GitHub:
 
-  "Submissions ... do not contain any scripts that, upon import and at any other point,
-   automatically and/or without user consent redirect users outside the Unity Editor
-   [or] programmatically add, update, or remove packages in user projects, except for
-   packages included in the offering's own Asset Store product."
+  2.5.1.e  "Offerings must not programmatically add, update, or remove packages in user
+            projects, except for packages included in the offering's own Asset Store
+            product."
 
-  "Packages may only include dependencies on Unity packages or other packages already
-   included in the same published product."
+An earlier version of this header ran that sentence together with 2.5.1.d, which is the
+one about redirecting the user out of the editor, and so implied that 2.5.1.e carries the
+same "automatically and/or without user consent" qualifier. It does not. A button the user
+chose to press is no defence, and reading it as one is how you spend a review cycle.
 
-The one-button PuerTS installer adds a third-party package, and `Polyfork > Update Package`
-rewrites `packages-lock.json` and re-adds this one. Both are the right behaviour for a
-package installed from a git URL and both are disqualifying on the store, where updates
-arrive through the store itself.
+That cost the one-button PuerTS installer, which is gone: the engine is vendored into the
+package instead (`Tools~/vendor-puerts.py`), which is the same mechanism Meta's XR SDK uses
+- every package it pulls in is one of its own, declared rather than installed.
+
+What is left is `Polyfork > Update Package`, which re-adds this package from its git URL.
+It is the right behaviour for a git install and wrong twice over here: the store delivers
+its own updates, and a store install lands in `Assets/Polyfork/` where there is no package
+to update, so `Client.Add` would fetch a SECOND copy alongside the imported files.
 
 So rather than maintain two codebases, this produces the store variant from the one:
 files listed below are dropped, regions between `// <store-strip>` and `// </store-strip>`
@@ -36,9 +41,6 @@ ROOT = Path(__file__).resolve().parent.parent
 DROP_FILES = [
     "Editor/PolyforkUpdate.cs",
     "Editor/PolyforkUpdate.cs.meta",
-    # Only ever unpacked what the installer downloaded.
-    "Editor/PolyforkTar.cs",
-    "Editor/PolyforkTar.cs.meta",
 ]
 
 # Never allowed to survive into the submission.
@@ -50,6 +52,18 @@ FORBIDDEN = [
 ]
 
 SKIP_DIRS = {".git", "Library", "Temp", "obj"}
+
+
+def read_lossy(path: Path) -> str:
+    """Reads source for SCANNING only.
+
+    Vendored PuerTS carries one file with a GBK byte in a comment (`Src/Backends/BackendJs.cs`),
+    which is how upstream ships it and how it is copied here - byte-identical, so it behaves in
+    Unity exactly as the real package does. Refusing to decode it would mean the compliance scan
+    below never runs over the vendored tree, which is the one place an unreviewed `Client.Add`
+    could hide.
+    """
+    return path.read_text(encoding="utf-8", errors="replace")
 
 
 def strip_regions(text: str) -> str:
@@ -85,11 +99,13 @@ def build(out: Path) -> int:
 
     stripped = 0
     for path in out.rglob("*.cs"):
-        text = path.read_text(encoding="utf-8")
+        text = read_lossy(path)
         if "<store-strip>" not in text:
             continue
 
-        path.write_text(strip_regions(text), encoding="utf-8")
+        # Strict here, lossy only for scanning: the marker is ours, so a file that carries
+        # one is a file we wrote, and rewriting it through a lossy decode would corrupt it.
+        path.write_text(strip_regions(path.read_text(encoding="utf-8")), encoding="utf-8")
         stripped += 1
         print(f"  stripped {path.relative_to(out)}")
 
@@ -98,7 +114,7 @@ def build(out: Path) -> int:
     # ---- prove it, rather than assume it -------------------------------------
     problems = []
     for path in out.rglob("*.cs"):
-        text = path.read_text(encoding="utf-8")
+        text = read_lossy(path)
         for pattern, why in FORBIDDEN:
             for match in re.finditer(pattern, text):
                 line = text[: match.start()].count("\n") + 1
@@ -108,7 +124,7 @@ def build(out: Path) -> int:
     # than a policy one because it wastes the review slot.
     orphans = ["InstallAsync", "PollAdd", "_addRequest", "_installing", "PolyforkTar", "Unpack("]
     for path in out.rglob("*.cs"):
-        text = path.read_text(encoding="utf-8")
+        text = read_lossy(path)
         for name in orphans:
             if name in text:
                 line = text[: text.index(name)].count("\n") + 1

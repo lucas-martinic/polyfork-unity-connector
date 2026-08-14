@@ -1,5 +1,4 @@
 using UnityEditor;
-using UnityEngine;
 
 namespace Polyfork.EditorTools
 {
@@ -14,27 +13,21 @@ namespace Polyfork.EditorTools
     ///
     /// AssetDatabase rather than Resources because a package path is a real asset path, and
     /// this is the one place that knows where the package keeps them.
+    ///
+    /// The root used to be hardcoded to <c>Packages/com.polyfork.connector</c>, which exists
+    /// only for a UPM install. Imported from a <c>.unitypackage</c> - the Asset Store's own
+    /// delivery - there is no package by that name and the read returned null, so local baking
+    /// silently fell back to the server for exactly the users the store sends.
+    /// <see cref="PolyforkPackagePath"/> answers for both layouts.
     /// </summary>
     static class PolyforkEditorJsScripts
     {
-        const string Root = "Packages/com.polyfork.connector/Editor/JS";
-
         [InitializeOnLoadMethod]
         static void Register()
         {
             PolyforkJsRuntimeProvider.ScriptSource = () => (Read("three-trimmed"), Read("polyfork-bridge"));
         }
 
-        static string Read(string name)
-        {
-            // The package path when installed normally. An embedded or local checkout resolves
-            // through the same virtual path, so this covers both.
-            var asset = AssetDatabase.LoadAssetAtPath<TextAsset>($"{Root}/{name}.txt");
-            if (asset != null) return asset.text;
-
-            Debug.LogWarning($"[Polyfork] could not read {Root}/{name}.txt; local baking is unavailable " +
-                             "and geometry will be rebuilt on the server instead.");
-            return null;
-        }
+        static string Read(string name) => PolyforkPackagePath.ReadText($"Editor/JS/{name}.txt");
     }
 }

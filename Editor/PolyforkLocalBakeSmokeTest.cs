@@ -32,8 +32,10 @@ namespace Polyfork.EditorTools
         {
             if (!PolyforkJsRuntimeProvider.IsAvailable)
             {
-                Debug.LogWarning("[Polyfork] no JS engine is installed, so local baking is unavailable. " +
-                                 "Install the Puerts core and QuickJS packages to enable it.");
+                Debug.LogWarning("[Polyfork] the JS engine did not register, so local baking is " +
+                                 "unavailable and rebuilds will go to the server. The engine ships " +
+                                 "with this package and is editor-only and desktop-only; open " +
+                                 "Polyfork ▸ Setup for what to check.");
                 return;
             }
 
