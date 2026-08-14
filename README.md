@@ -28,6 +28,11 @@ Unity ▸ **Window ▸ Package Manager ▸ + ▸ Add package from git URL**:
 https://github.com/lucas-martinic/polyfork-unity-connector.git
 ```
 
+Or grab **`Polyfork.unitypackage`** from
+[Releases](https://github.com/lucas-martinic/polyfork-unity-connector/releases) and
+double-click it. The git URL updates in place from `Polyfork ▸ Update Package`; the
+`.unitypackage` is the one-file version for handing to somebody.
+
 Or by hand, which also lets you pin a version with `#v0.2.0`:
 
 ```jsonc

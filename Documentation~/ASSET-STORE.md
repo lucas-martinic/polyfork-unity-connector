@@ -1,6 +1,7 @@
 # Asset Store submission
 
-Everything needed to submit this package, and the three things that must be settled first.
+Everything needed to submit this package. The pricing and licensing questions are settled
+(free, pack kept); one technical blocker remains and is handled by a build script.
 
 ---
 
@@ -35,38 +36,23 @@ python3 "Tools~/make-store-package.py" ../polyfork-store-build
 The setup window survives, minus the button: it still explains what PuerTS gives you and
 opens the releases page when clicked, which is user-initiated and allowed.
 
-### 1b. The animation clips — **needs a decision, and it is not a technical one**
+### 1b. The animation clips — **decided: keep them, ship free**
 
 The character animation feature downloads `polyfork.dev/anim/xbot.glb` into the user's
-project. Those clips are Mixamo animations, and they reached polyfork.dev via three.js's
-example models rather than an Adobe account.
+project. Those clips are Mixamo animations that reached polyfork.dev via three.js's example
+models rather than an Adobe account.
 
-Mixamo's terms license content **to the account holder** for use in their own projects. They
-do not grant the right to redistribute animation data as an asset, which is what shipping it
-inside a commercial Asset Store product amounts to — the download makes it no less a
-distribution. three.js's own MIT licence covers the library's source, not the example models,
-and their repository states no licence for them.
+**Decision (Lucas, 2026-08-14): keep the pack, and the package is free.** Recorded here
+rather than argued: Mixamo's terms restrict redistribution regardless of price, so charging
+nothing reduces the exposure without erasing it. If a complaint ever arrives, the fix is
+already scoped — the retargeting code does not care where clips come from, only that the bone
+names are Mixamo-compatible, so a CC0 locomotion set drops in without touching anything else.
 
-Three ways out, in order of how quickly they close it:
+### 1c. Free on GitHub — **settled: the package is free**
 
-1. **Ship without the pack.** Characters import rigged and still, and the docs say so. Costs
-   the nicest demo in the product.
-2. **Source clips you can redistribute.** CC0 locomotion sets exist; a small idle/walk/run set
-   is a day's work to find and verify. The retargeting code is indifferent to where the clips
-   came from — it only needs Mixamo-compatible bone names.
-3. **Get the licence.** A Mixamo/Adobe account whose terms permit the use, confirmed in
-   writing before submitting.
-
-**Do not submit on the current pack.** A licensing complaint after launch is worse than a
-rejection before it.
-
-### 1c. Free on GitHub — **a pricing decision, not a rule**
-
-The package is MIT and public. That is permitted, and plenty of store assets are also on
-GitHub, but two things follow: buyers can obtain it free, and a reviewer may ask what the
-paid version adds. Either price it as convenience-and-support, or hold something back for
-the paid build. Decide before writing the description, because the description has to be
-honest about it.
+MIT and public, and the store listing is free too, so there is no gap between what a buyer
+pays and what GitHub gives away. Say plainly in the description that the source is on GitHub;
+it reads as confidence rather than a caveat.
 
 ---
 
@@ -76,7 +62,7 @@ honest about it.
   Unity Registry packages, correctly declared in `package.json` — which is what the rules
   require. They must *also* be named in the store description.
 - **Third-party notices.** `Third Party Notices.md` carries three.js's MIT notice in full. Add
-  the animation clips to it if 1b is resolved by licensing rather than removal.
+  the animation clips to it, since the pack is being kept.
 - **Licence file.** `LICENSE.md`, MIT.
 - **Minimum editor version.** `package.json` says `6000.0`, above the 2021.3 LTS floor.
 - **Size.** Under a megabyte, against a 700 MB UPM ceiling.
@@ -145,6 +131,19 @@ Remixing and importing use the polyfork.dev web API, so an internet connection i
 
 ---
 
+## 3b. The .unitypackage
+
+`Tools~/make-unitypackage.py` builds one without Unity — a .unitypackage is a gzipped tar
+laid out by GUID, which is a format, not a ritual. Paths are rewritten to `Assets/Polyfork/…`
+and `~` folders are dropped, since Unity ignores those wherever they land.
+
+```bash
+python3 "Tools~/make-unitypackage.py" Polyfork.unitypackage
+```
+
+It is attached to each GitHub release, which is the answer to "where do I get the Unity
+package" for anyone who does not want the git URL.
+
 ## 4. Images
 
 Generated into `Documentation~/store/`, at the sizes the store asks for:
@@ -154,6 +153,11 @@ Generated into `Documentation~/store/`, at the sizes the store asks for:
 | `icon-160x160.png` | 160 × 160 | Icon grid |
 | `card-420x280.png` | 420 × 280 | Search results |
 | `cover-1950x1300.png` | 1950 × 1300 | Product page header |
+
+All three are on `#eceae6`, which is not a style choice: it is the exact background every
+asset render on polyfork.dev is photographed against, and the one the connector clears its
+own preview to. Listing art on the brand's dark ink matched the logo and nothing the product
+shows anyone.
 
 **Screenshots are still needed, and they are the part that sells it.** Marketing images get
 rejected for poor quality, excessive text or unattractive design, so:
@@ -170,8 +174,8 @@ than photographing the whole editor. Avoid Unity's default skybox in any scene s
 
 ## 5. Submission checklist
 
-- [ ] **1b settled** — clips removed, relicensed, or replaced
-- [ ] Decide the price, given the package is free on GitHub
+- [x] **1b settled** — pack kept, package ships free
+- [x] **Price settled** — free
 - [ ] Publisher account created at [publisher.unity.com](https://publisher.unity.com), profile
       filled in (name, description, logo, contact)
 - [ ] `python3 "Tools~/make-store-package.py"` run, output **clean**
