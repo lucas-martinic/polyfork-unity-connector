@@ -243,10 +243,29 @@ namespace Polyfork
              *
              * So the package ships one. The stock shaders stay as a fallback, on the grounds
              * that a grey model is better than a magenta one. */
-            var shader = Shader.Find("Polyfork/Vertex Color")
-                         ?? Shader.Find("Universal Render Pipeline/Simple Lit")
-                         ?? Shader.Find("Universal Render Pipeline/Lit")
-                         ?? Shader.Find("Standard");
+            /* Not `??` between these. Unity overloads == to report a destroyed object as
+             * null, and `??` does not use that overload - so a Shader.Find that comes back
+             * destroyed-but-not-null wins the chain and yields a material whose shader has
+             * no ShadowCaster pass, which is an object that renders and casts nothing. The
+             * same trap turned an AddComponent into a prefab that never got written. */
+            Shader shader = null;
+            foreach (var name in new[]
+                     {
+                         "Polyfork/Vertex Color",
+                         "Universal Render Pipeline/Simple Lit",
+                         "Universal Render Pipeline/Lit",
+                         "Standard",
+                     })
+            {
+                var found = Shader.Find(name);
+                if (found == null) continue;      // Unity's ==, which knows about destroyed
+                shader = found;
+                if (name != "Polyfork/Vertex Color")
+                    Debug.LogWarning($"[Polyfork] falling back to \"{name}\": the package's own " +
+                                     "vertex-colour shader was not found, so meshes will lose " +
+                                     "their colours and cast no shadow.");
+                break;
+            }
 
             if (shader == null)
             {

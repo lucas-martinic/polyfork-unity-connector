@@ -5,6 +5,20 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.3] - 2026-08-14
+
+### Fixed
+
+- **The shader fallback chain used `??`, which Unity's null does not answer to.** Unity
+  overloads `==` so a destroyed object reports as null; `??` does not use that overload. A
+  `Shader.Find` coming back destroyed-but-not-null therefore won the chain and produced a
+  material whose shader has no `ShadowCaster` pass — an object that renders and casts nothing.
+  The same trap turned an `AddComponent` into a prefab that never got written earlier today.
+
+  It now tests each candidate with `==`, and says so in the Console when it falls back, because
+  losing the package's own vertex-colour shader costs both the colours and the shadow and
+  should not be silent.
+
 ## [0.14.2] - 2026-08-14
 
 ### Fixed
