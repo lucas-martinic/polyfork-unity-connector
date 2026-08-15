@@ -5,6 +5,32 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.1] - 2026-08-14
+
+### Fixed
+
+- **Dragging a slider threw `MissingReferenceException` on a destroyed Mesh**, and IMGUI then
+  reported an unrelated `Invalid GUILayout state` on top of it, because the throw left the
+  layout mid-block. Two errors, neither naming the cause.
+
+  A morph set writes into the meshes of the model it was built from, and handing the preview a
+  new model destroys the old one's. 0.16.0 kicked a rebuild *and* a measurement from the same
+  drag, so the rebuild landed afterwards, destroyed those meshes, and the next drag wrote into
+  them.
+
+  Three changes, because one would only have made it less likely:
+
+  - `AdoptPreview` drops every morph set. Putting it there rather than at each call site is
+    what makes an outliving set impossible instead of unlikely.
+  - The measurement now owns the first drag: it produces correct geometry by itself, so there
+    is no concurrent rebuild to race. As a bonus this stops the knob being re-measured on every
+    drag and never once used, which is what the race actually caused.
+  - `PolyforkMorphSet.Apply` checks its meshes are alive and retires itself if not, so no
+    future caller can throw from inside `OnGUI`.
+
+- A knob measured and found to re-topologise is remembered, instead of costing two bakes on
+  every drag to reach the same answer.
+
 ## [0.16.0] - 2026-08-14
 
 ### Added

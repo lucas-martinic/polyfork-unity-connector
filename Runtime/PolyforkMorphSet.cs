@@ -109,6 +109,19 @@ namespace Polyfork
         {
             if (!IsMorphable) return;
 
+            /* The meshes belong to whatever is displaying them, and a caller that swaps the
+             * displayed model destroys them. Writing into a destroyed Mesh throws from inside
+             * OnGUI, which then leaves IMGUI mid-layout and reports an unrelated
+             * "Invalid GUILayout state" on top of it - two errors, neither naming the cause.
+             *
+             * A morph set whose meshes are gone is simply finished. Saying so once is better
+             * than throwing on every repaint. */
+            if (!MeshesAlive())
+            {
+                IsMorphable = false;
+                return;
+            }
+
             var t = Mathf.Approximately(MaxValue, MinValue)
                 ? 0f
                 : Mathf.Clamp01((value - MinValue) / (MaxValue - MinValue));
@@ -126,6 +139,15 @@ namespace Polyfork
                 // Bounds matter for culling and for anything that measures the object.
                 target.Mesh.RecalculateBounds();
             }
+        }
+
+        /// <summary>False once anything has destroyed the meshes this writes into.</summary>
+        bool MeshesAlive()
+        {
+            foreach (var target in _targets)
+                if (target.Mesh == null) return false;   // Unity's ==, which knows about destroyed
+
+            return true;
         }
 
         /// <summary>Restores the geometry the min bake arrived with.</summary>

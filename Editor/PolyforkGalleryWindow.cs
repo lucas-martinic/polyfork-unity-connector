@@ -71,6 +71,10 @@ namespace Polyfork.EditorTools
         readonly Dictionary<string, PolyforkMorphSet> _morphs = new();
         readonly HashSet<string> _measuring = new();
 
+        /// <summary>Knobs measured and found to re-topologise. Measuring them again would
+        /// cost two bakes to reach the same answer.</summary>
+        readonly HashSet<string> _unmorphable = new();
+
         // ---- filters --------------------------------------------------------
         string _search = "";
         string _kit = "All kits";
@@ -412,6 +416,7 @@ namespace Polyfork.EditorTools
             _ranges.Clear();
             _morphs.Clear();
             _measuring.Clear();
+            _unmorphable.Clear();
             _choices.Clear();
             _toggles.Clear();
             _slotColors.Clear();
@@ -476,9 +481,20 @@ namespace Polyfork.EditorTools
             }
         }
 
-        /// <summary>Puts a freshly built model on screen, with its colours and framing.</summary>
+        /// <summary>
+        /// Puts a freshly built model on screen, with its colours and framing.
+        ///
+        /// Every morph set goes with it. A set writes into the meshes of the model it was
+        /// built from, and handing the preview a new model destroys the old one's meshes - so
+        /// a set that outlives the model it belongs to writes into destroyed meshes and throws
+        /// from inside OnGUI. Invalidating here rather than at each call site is what makes
+        /// that impossible rather than merely unlikely; the measurement registers its own set
+        /// AFTER adopting, which is the one ordering that survives this.
+        /// </summary>
         void AdoptPreview(GameObject go, PolyforkAsset asset, bool frame)
         {
+            InvalidateMorphs();
+
             _previewSlots = _schema != null ? PolyforkColorSlots.Build(go, _schema) : null;
             if (_slotColors.Count > 0) _previewSlots?.Apply(_slotColors);
 
@@ -511,7 +527,8 @@ namespace Polyfork.EditorTools
         async Task MeasureMorphAsync(PolyforkKnob knob)
         {
             var asset = _selected;
-            if (asset == null || knob == null || !_measuring.Add(knob.Name)) return;
+            if (asset == null || knob == null) return;
+            if (_unmorphable.Contains(knob.Name) || !_measuring.Add(knob.Name)) return;
 
             GameObject atMin = null, atMax = null;
             try
@@ -521,12 +538,20 @@ namespace Polyfork.EditorTools
                 if (atMin == null || atMax == null || _selected != asset) return;
 
                 var set = PolyforkMorphSet.Build(atMin, atMax, knob.Name, knob.Min, knob.Max);
-                if (!set.IsMorphable) return;
+                if (!set.IsMorphable)
+                {
+                    // Re-topologises, so it can only ever be rebuilt. Say so once, and put the
+                    // current value on screen the slow way.
+                    _unmorphable.Add(knob.Name);
+                    QueuePreviewRebuild(immediate: true);
+                    return;
+                }
 
-                _morphs[knob.Name] = set;
-
+                // Adopt FIRST: AdoptPreview drops every morph set, this one included.
                 AdoptPreview(atMin, asset, frame: false);
                 atMin = null;                       // the preview owns it now
+
+                _morphs[knob.Name] = set;
 
                 set.Apply(_ranges.TryGetValue(knob.Name, out var v) ? v : knob.DefaultFloat);
                 Repaint();
@@ -1523,12 +1548,21 @@ namespace Polyfork.EditorTools
                 return;
             }
 
-            /* Not measured yet. Rebuild as before so something moves now, and find out in the
-             * background whether this knob can be morphed - two bakes, once, after which the
-             * branch above takes over for the rest of the session. */
-            InvalidateMorphs(except: knob.Name);
-            QueuePreviewRebuild();
-            _ = MeasureMorphAsync(knob);
+            /* Not measured yet. Measure, and do NOT also queue a rebuild.
+             *
+             * Doing both raced: the rebuild adopts a new preview, adopting invalidates every
+             * morph set, and it lands after the measurement registered one - so the knob was
+             * re-measured on every drag and never once used. The measurement produces correct
+             * geometry by itself (it adopts its own min bake and applies the current value),
+             * and falls back to a rebuild if the knob turns out not to be morphable. */
+            if (_unmorphable.Contains(knob.Name))
+            {
+                QueuePreviewRebuild();      // known to re-topologise: rebuild, as before
+                return;
+            }
+
+            if (!_measuring.Contains(knob.Name)) _ = MeasureMorphAsync(knob);
+            Repaint();
         }
 
         void DrawImportSection()
