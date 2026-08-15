@@ -268,6 +268,9 @@ namespace Polyfork.EditorTools
 
         void OnEditorUpdate()
         {
+            // Drives the camera glide, and repaints only while it is still gliding.
+            if (_preview != null && _preview.Settle()) Repaint();
+
             // Geometry rebuilds need the network, so hold them while capped rather than
             // firing requests that can only fail. Colour edits are local and unaffected.
             /* Gated on whether this particular rebuild would spend anything. An asset at its

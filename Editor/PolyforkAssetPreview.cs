@@ -36,6 +36,26 @@ namespace Polyfork.EditorTools
         Vector2 _orbit = new(25f, 18f);
         float _distance = 2.2f;
 
+        /* Where the camera is HEADING, with _orbit and _distance easing towards it.
+         *
+         * The web viewer runs OrbitControls with enableDamping, which is most of why dragging
+         * a model on polyfork.dev feels different from dragging one here: input moved the
+         * camera instantly and stopped dead. Settle() is called from the window's editor tick,
+         * so the glide costs repaints only while it is actually gliding. */
+        Vector2 _orbitTarget = new(25f, 18f);
+        float _distanceTarget = 2.2f;
+
+        /// <summary>The distance Frame() chose, which the zoom clamps are expressed against.</summary>
+        float _frameDistance = 2.2f;
+
+        // OrbitControls' own default. Applied per editor tick rather than per rendered frame,
+        // which is close enough at tick rates and avoids a repaint loop that never settles.
+        const float Damping = 0.18f;
+
+        // viewer.js: controls.minDistance = d * 0.35, controls.maxDistance = d * 2.5.
+        const float MinZoom = 0.35f;
+        const float MaxZoom = 2.5f;
+
         /// <summary>What the camera orbits. Set by Frame, never by a rebuild.</summary>
         Vector3 _focus;
         Bounds _bounds;
@@ -119,7 +139,8 @@ namespace Polyfork.EditorTools
         public void Frame()
         {
             var size = Mathf.Max(_bounds.size.x, _bounds.size.y, _bounds.size.z);
-            _distance = Mathf.Max(0.4f, size * 2.6f);
+            _distance = _distanceTarget = _frameDistance = Mathf.Max(0.4f, size * 2.6f);
+            _orbitTarget = _orbit;
             _focus = _bounds.center;
         }
 
@@ -146,7 +167,12 @@ namespace Polyfork.EditorTools
             shadow.SetFloat(GroundYId, _bounds.min.y);
             shadow.SetVector(LightDirId, KeyLightDirection);
 
-            foreach (var renderer in root.GetComponentsInChildren<MeshRenderer>(true))
+            /* Renderer, not MeshRenderer. A rigged asset draws through a
+             * SkinnedMeshRenderer, which is a Renderer but not a MeshRenderer, so the narrower
+             * type silently skipped every character and fish in the catalogue: the shark had
+             * no shadow, the sea anemone did, and the difference was the rig rather than
+             * anything about either model. */
+            foreach (var renderer in root.GetComponentsInChildren<Renderer>(true))
             {
                 var materials = renderer.sharedMaterials;
                 var extended = new Material[materials.Length + 1];
@@ -154,6 +180,29 @@ namespace Polyfork.EditorTools
                 extended[materials.Length] = shadow;
                 renderer.sharedMaterials = extended;
             }
+        }
+
+        /// <summary>
+        /// Eases the camera towards where input pointed it. Returns true while still moving,
+        /// so the caller repaints only for as long as there is something to see.
+        /// </summary>
+        public bool Settle()
+        {
+            var dOrbit = _orbitTarget - _orbit;
+            var dDist = _distanceTarget - _distance;
+
+            // Below a fifth of a degree and a millimetre nobody can see the difference, and
+            // an asymptote that never arrives is a repaint every tick forever.
+            if (dOrbit.sqrMagnitude < 0.04f && Mathf.Abs(dDist) < 0.001f)
+            {
+                _orbit = _orbitTarget;
+                _distance = _distanceTarget;
+                return false;
+            }
+
+            _orbit += dOrbit * Damping;
+            _distance += dDist * Damping;
+            return true;
         }
 
         public void Clear()
@@ -181,8 +230,15 @@ namespace Polyfork.EditorTools
         static void ReleaseGeneratedAssets(GameObject root)
         {
             foreach (var filter in root.GetComponentsInChildren<MeshFilter>(true))
+                Release(filter.sharedMesh);
+
+            // Same blind spot as the shadow had: a rigged asset keeps its mesh on the
+            // SkinnedMeshRenderer, so every rebuild of one leaked a mesh.
+            foreach (var skinned in root.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                Release(skinned.sharedMesh);
+
+            static void Release(Mesh mesh)
             {
-                var mesh = filter.sharedMesh;
                 if (mesh != null && !EditorUtility.IsPersistent(mesh))
                     UnityEngine.Object.DestroyImmediate(mesh);
             }
@@ -245,14 +301,20 @@ namespace Polyfork.EditorTools
             switch (e.type)
             {
                 case EventType.MouseDrag when e.button == 0:
-                    _orbit.x += e.delta.x;
-                    _orbit.y = Mathf.Clamp(_orbit.y + e.delta.y, -89f, 89f);
+                    /* OrbitControls turns a drag of the element's full HEIGHT into a full
+                     * revolution, on both axes. A fixed degrees-per-pixel felt different in a
+                     * small preview from a large one, and different again from the website. */
+                    var perPixel = 360f / Mathf.Max(1f, rect.height);
+                    _orbitTarget.x += e.delta.x * perPixel;
+                    _orbitTarget.y = Mathf.Clamp(_orbitTarget.y + e.delta.y * perPixel, -89f, 89f);
                     e.Use();
                     GUI.changed = true;
                     break;
 
                 case EventType.ScrollWheel:
-                    _distance = Mathf.Clamp(_distance * (1f + e.delta.y * 0.05f), 0.15f, 60f);
+                    _distanceTarget = Mathf.Clamp(_distanceTarget * (1f + e.delta.y * 0.05f),
+                                                  _frameDistance * MinZoom,
+                                                  _frameDistance * MaxZoom);
                     e.Use();
                     GUI.changed = true;
                     break;

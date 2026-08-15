@@ -5,6 +5,30 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0] - 2026-08-14
+
+### Fixed
+
+- **Rigged assets cast no shadow.** The shark had none and the sea anemone did, and the
+  difference was the rig rather than anything about either model: the planar shadow was applied
+  by walking `MeshRenderer`, and a rigged asset draws through a `SkinnedMeshRenderer`, which is
+  a `Renderer` but not a `MeshRenderer`. Every character and fish in the catalogue was skipped.
+
+- The same blind spot leaked a mesh per rebuild for those assets: the cleanup freed meshes
+  found through `MeshFilter`, and a rigged asset keeps its mesh on the renderer.
+
+### Changed
+
+- **The preview camera now moves like the one on polyfork.dev.** `viewer.js` runs OrbitControls
+  with `enableDamping`, and this moved the camera instantly and stopped dead, which is most of
+  why dragging a model felt different in the editor.
+
+  Input now sets a target the camera eases towards, driven from the window's editor tick so the
+  glide costs repaints only while it is gliding. A drag of the preview's full height is a full
+  revolution, as OrbitControls does it, rather than a fixed degrees-per-pixel that felt
+  different in a small preview from a large one. Zoom is clamped to 0.35x–2.5x the framing
+  distance, which is what `viewer.js` sets `minDistance` and `maxDistance` to.
+
 ## [0.14.3] - 2026-08-14
 
 ### Fixed
