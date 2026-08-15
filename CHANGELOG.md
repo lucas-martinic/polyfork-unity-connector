@@ -5,6 +5,33 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.2] - 2026-08-14
+
+### Fixed
+
+- **A knob's authored `step` was ignored.** 579 of 1405 published range knobs declare one, and
+  the median declares 8 distinct values where the fallback grid bakes 40. The tracked crawler's
+  length declares `step: 0.1` over 5.2–6.4 — twelve machines — and the grid was manufacturing
+  forty, two thirds of which are the same machine rounded differently.
+
+  Worse than wasted work: an off-step value is a cache key nobody else will ever ask for, so the
+  bake is never shared. Honouring the step means a drag lands on values other people have
+  already baked.
+
+  Fixed in `remix_snap` first, which is the authority; the client mirrors it.
+
+### Note on knobs that cannot be smooth
+
+  Morphing only applies to a knob that moves vertices. The crawler's length is not one: its own
+  description says it *"REBUILDS rather than scales — the track belt gains cleat stations, the
+  bogie gains road wheels"*, and measured, it runs 7512 → 7968 → 8352 vertices across its range.
+  Its cabRake is 7968 at both ends, which is why the rake feels smooth and the length does not.
+
+  For those knobs the remaining gap with the web viewer is structural: the browser re-runs the
+  module per input event and hands three.js a new BufferGeometry, while the editor runs the same
+  module and then marshals its output into new Unity meshes. Fewer, authored steps narrow it;
+  closing it means making the rebuild itself cheaper.
+
 ## [0.16.1] - 2026-08-14
 
 ### Fixed

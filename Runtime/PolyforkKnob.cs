@@ -111,7 +111,13 @@ namespace Polyfork
              * count, so the slider had two positions and nothing between them could be baked.
              * A real count needs three values to be worth counting; two states are a toggle. */
             var isCount = IsWhole(Min) && IsWhole(Max) && Max - Min <= 8f && Max - Min >= 2f;
-            var step = isCount ? 1d : (Max - Min) / 40d;
+            /* An authored Step wins, mirroring remix_snap. Most knobs that declare one
+             * declare far fewer values than the 40-step fallback, so honouring it means
+             * fewer rebuilds AND bakes that land on keys other people have already asked
+             * for - an off-step value is a cache miss by construction. */
+            var step = Step > 0f && Step <= Max - Min
+                ? Step
+                : (isCount ? 1d : (Max - Min) / 40d);
 
             /* Away from zero, not to even. PHP rounds 10.5 up and .NET rounds it down to
              * the even neighbour, so the default MidpointRounding would put the client one
