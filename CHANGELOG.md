@@ -5,6 +5,55 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0] - 2026-08-14
+
+### Fixed
+
+- **Local baking almost never ran.** Measured by running every published module against the
+  shipped JavaScript runtime: **43 of 578 built, 535 threw.** So roughly fourteen assets in
+  fifteen silently fell back to the server, and that is the whole of "some assets rebuild while
+  I drag and some only move when I let go" — the ones that worked were the 7% whose modules
+  happened to fit.
+
+  The bundle was hand-trimmed, and trimmed well past what the catalogue uses:
+
+  | | |
+  | --- | --- |
+  | 366 | `mergeGeometries is not defined` |
+  | 60 | `THREE.Matrix4 is not a constructor` |
+  | 41 | `THREE.Bone is not a constructor` |
+  | 28 | `THREE.Path is not a constructor` |
+  | 18 | `THREE.SphereGeometry is not a constructor` |
+
+  The first is not even a trimming fault: 518 of 578 modules import
+  `three/addons/utils/BufferGeometryUtils.js`, and `PolyforkModuleTransform` drops any import
+  whose path contains "three" — which that one does — so the names were never bound at all.
+
+  `Editor/JS/three-runtime.txt` is now built by `Tools~/build-three-runtime.mjs` from the
+  upstream sources, including `BufferGeometryUtils` and `ConvexGeometry`, with the addon helpers
+  exposed as bare globals because that is how a module body refers to them once its import line
+  is gone. **576 of 578 now build.**
+
+  736 KB against 342 KB. It is Editor-only and never enters a player build, so that is 394 KB of
+  editor memory for the difference between a feature that works and one that worked for one
+  asset in fourteen.
+
+- **A module that throws is remembered.** Only an empty result was, so a module raising a
+  TypeError was re-run on every bake: the same warning logged over and over, two more per drag
+  once morph measurement started asking too, and a fallback to the server each time that the
+  first attempt had already established was needed.
+
+- **Morph measurement gives up on a knob that failed**, instead of costing two more failed bakes
+  per slider movement, and falls back to the server baker the way the rebuild path does — so an
+  asset with a broken local module can still have morphable knobs.
+
+### Added
+
+- `Tools~/check-modules.mjs` runs every published module against the shipped runtime and reports
+  what breaks. The number that matters is how many BUILD: a runtime missing one common import
+  looks like "the editor is slow", not like a missing export, which is exactly how this went
+  unnoticed. Run it after touching the runtime or the module transform.
+
 ## [0.17.0] - 2026-08-14
 
 ### Changed

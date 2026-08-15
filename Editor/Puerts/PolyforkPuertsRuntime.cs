@@ -47,7 +47,7 @@ namespace Polyfork
             if (_env != null) return;
 
             if (string.IsNullOrEmpty(threeBundle))
-                throw new ArgumentException("The trimmed three.js bundle is required.", nameof(threeBundle));
+                throw new ArgumentException("The three.js runtime bundle is required.", nameof(threeBundle));
             if (string.IsNullOrEmpty(bridgeScript))
                 throw new ArgumentException("The bake bridge is required.", nameof(bridgeScript));
 
@@ -80,7 +80,7 @@ namespace Polyfork
                 // rewriting - only promotion to globalThis, since `var` at eval scope is not
                 // guaranteed to land there.
                 step = $"evaluating three.js ({threeBundle.Length} chars)";
-                _env.Eval(threeBundle, "three-trimmed.js");
+                _env.Eval(threeBundle, "three-runtime.js");
 
                 step = "promoting THREE to globalThis";
                 _env.Eval("globalThis.THREE = THREE;", "three-global.js");

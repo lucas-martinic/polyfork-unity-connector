@@ -3,18 +3,21 @@
 This package redistributes the components below. Each remains under its own
 licence, reproduced here in full as those licences require.
 
-Both are delivered through the optional **Local Baking** sample rather than the
-core package, so a project that does not import that sample ships neither.
+Both are Editor-only and never enter a player build.
 
 ---
 
 ## three.js
 
-A trimmed build of three.js is bundled as
-`Samples~/LocalBaking/Resources/Polyfork/three-trimmed.txt`. Polyfork's asset
-modules are authored against the three.js geometry API, so evaluating one
-locally requires the library those modules import. The build is reduced to the
-classes the asset modules actually reference; it is otherwise unmodified.
+three.js is bundled as `Editor/JS/three-runtime.txt`, together with
+`BufferGeometryUtils` and `ConvexGeometry` from its examples. Polyfork's asset
+modules are authored against the three.js geometry API, so evaluating one locally
+requires the library they import; 518 of 578 published modules import
+`BufferGeometryUtils` as well.
+
+Built by `Tools~/build-three-runtime.mjs` from the upstream sources, minified and
+otherwise unmodified. An earlier hand-trimmed build carried only part of the API
+and 535 of 578 modules failed against it; the trimming is not worth repeating.
 
 Homepage: https://threejs.org
 Source: https://github.com/mrdoob/three.js

@@ -22,7 +22,7 @@ namespace Polyfork
         public static bool IsAvailable => Factory != null;
 
         /// <summary>The trimmed three.js bundle and the bake bridge, shipped with the package.</summary>
-        public const string ThreeBundleResource = "Polyfork/three-trimmed";
+        public const string ThreeBundleResource = "Polyfork/three-runtime";
         public const string BridgeResource = "Polyfork/polyfork-bridge";
 
         /// <summary>

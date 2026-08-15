@@ -149,7 +149,27 @@ namespace Polyfork
             var values = request.Values.WithoutDefaults(request.Schema);
 
             var watch = System.Diagnostics.Stopwatch.StartNew();
-            var payloadJson = _runtime.Bake(request.Asset.Id, values.ToString());
+
+            string payloadJson;
+            try
+            {
+                payloadJson = _runtime.Bake(request.Asset.Id, values.ToString());
+            }
+            catch (Exception e)
+            {
+                /* A module that throws is a module that will throw again. Only an EMPTY result
+                 * was remembered before, so a module raising a TypeError - one reaching for
+                 * something the trimmed three.js bundle does not carry - was re-run on every
+                 * single bake: the same failure logged over and over, two more of them per
+                 * drag once morph measurement started asking too, and a fallback to the server
+                 * each time that the very first attempt had already established was needed.
+                 *
+                 * Remembering it means one warning, then the server baker for that asset. */
+                _unbakeable.Add(request.Asset.Id);
+                throw new PolyforkBakeUnavailableException(
+                    $"The module for {request.Asset.Id} threw: {e.Message}", e);
+            }
+
             var bakeMs = watch.Elapsed.TotalMilliseconds;
 
             if (string.IsNullOrEmpty(payloadJson))

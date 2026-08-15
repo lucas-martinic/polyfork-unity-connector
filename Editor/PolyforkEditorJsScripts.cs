@@ -25,7 +25,7 @@ namespace Polyfork.EditorTools
         [InitializeOnLoadMethod]
         static void Register()
         {
-            PolyforkJsRuntimeProvider.ScriptSource = () => (Read("three-trimmed"), Read("polyfork-bridge"));
+            PolyforkJsRuntimeProvider.ScriptSource = () => (Read("three-runtime"), Read("polyfork-bridge"));
         }
 
         static string Read(string name) => PolyforkPackagePath.ReadText($"Editor/JS/{name}.txt");

@@ -151,5 +151,10 @@ namespace Polyfork
     public sealed class PolyforkBakeUnavailableException : Exception
     {
         public PolyforkBakeUnavailableException(string message) : base(message) { }
+
+        /// <summary>Keeps the original failure attached, so a JS TypeError still has its
+        /// stack when this is logged rather than only a flattened message.</summary>
+        public PolyforkBakeUnavailableException(string message, Exception inner)
+            : base(message, inner) { }
     }
 }

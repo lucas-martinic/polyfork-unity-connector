@@ -511,7 +511,22 @@ namespace Polyfork.EditorTools
             var baker = _bakers.Resolve(_selected, _schema) ?? _bakers.Bakers.FirstOrDefault();
             if (baker == null) return null;
 
-            return await baker.BakeAsync(new PolyforkBakeRequest(_selected, _schema, values), ct);
+            var request = new PolyforkBakeRequest(_selected, _schema, values);
+
+            try
+            {
+                return await baker.BakeAsync(request, ct);
+            }
+            catch (Exception) when (!baker.ConsumesAllowance)
+            {
+                /* Same second chance the rebuild path gets. An asset whose local module throws
+                 * can still be measured on the server, and without this a broken module meant
+                 * the knob was never morphable either - punishing it twice for one fault. */
+                var fallback = _bakers.Bakers.FirstOrDefault(b => b.ConsumesAllowance && b.IsAvailable);
+                if (fallback == null || IsRateLimited) throw;
+
+                return await fallback.BakeAsync(request, ct);
+            }
         }
 
         /// <summary>
@@ -561,7 +576,12 @@ namespace Polyfork.EditorTools
             }
             catch (Exception e)
             {
-                Debug.LogWarning($"[Polyfork] could not measure '{knob.Name}' for morphing: {e.Message}");
+                /* Give up on this knob rather than retrying it on every drag. Measurement is
+                 * two bakes, so a knob that fails and is not remembered costs two more failures
+                 * per slider movement and fills the Console with the same warning. */
+                _unmorphable.Add(knob.Name);
+                Debug.LogWarning($"[Polyfork] could not measure '{knob.Name}' for morphing, so it "
+                                 + $"will rebuild instead: {e.Message}");
             }
             finally
             {
