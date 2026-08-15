@@ -57,6 +57,10 @@ namespace Polyfork.EditorTools
         /// for. The baker's own figure covers the module and the decode only.</summary>
         double _lastRebuildMs;
 
+        /// <summary>Which baker actually served the last rebuild. The readout said "local"
+        /// whenever an engine existed, which is not the same question.</summary>
+        string _lastBakerName;
+
         // ---- filters --------------------------------------------------------
         string _search = "";
         string _kit = "All kits";
@@ -580,6 +584,7 @@ namespace Polyfork.EditorTools
                 var baker = _bakers.Resolve(asset, _schema) ?? _bakers.Bakers.FirstOrDefault();
                 if (baker == null) return;
 
+                _lastBakerName = baker.Name;
                 var request = new PolyforkBakeRequest(asset, _schema, payload);
                 var meters = baker.ConsumesAllowance && payload.Count > 0;
 
@@ -616,6 +621,7 @@ namespace Polyfork.EditorTools
                         Debug.Log($"[Polyfork] rebuilding {asset.Id} on {fallback.Name}.");
 
                         meters = fallback.ConsumesAllowance && payload.Count > 0;
+                        _lastBakerName = fallback.Name;
                         go = await fallback.BakeAsync(request, _cts.Token);
                     }
                 }
@@ -1573,9 +1579,17 @@ namespace Polyfork.EditorTools
                      * unmeasured, so a rebuild that took about a second still read as
                      * "21 ms". The breakdown moves to the tooltip, where it answers the
                      * next question instead of being mistaken for the answer. */
+                    /* NAME THE BAKER. This said "local" whenever an engine was installed,
+                     * which is a different question from which baker ran - and the difference
+                     * is the whole reason a slider drag felt stuck. A server bake is a web
+                     * request, and its await cannot complete while IMGUI holds the drag loop,
+                     * so the rebuild flag stays set and every later change is dropped until
+                     * the drag ends. Locally baked assets do not have that problem. If this
+                     * says "server" while dragging, that is the answer. */
                     var haveTiming = _lastRebuildMs > 0d;
+                    var where = string.IsNullOrEmpty(_lastBakerName) ? "local" : _lastBakerName;
                     var timing = haveTiming
-                        ? $"local  ·  {_lastRebuildMs:0} ms"
+                        ? $"{where}  ·  {_lastRebuildMs:0} ms"
                         : "local bakes  ·  unmetered";
 
                     var rest = _localBaker != null
@@ -1585,7 +1599,7 @@ namespace Polyfork.EditorTools
                     GUILayout.Label(
                         new GUIContent(timing,
                             haveTiming
-                                ? $"Last rebuild: {_lastRebuildMs:0} ms end to end — " +
+                                ? $"Last rebuild ran on {where}: {_lastRebuildMs:0} ms end to end — " +
                                   $"{_localBaker?.LastEngineMs ?? 0d:0} ms running the module, " +
                                   $"{_localBaker?.LastDecodeMs ?? 0d:0} ms decoding " +
                                   $"{_localBaker?.LastPayloadKb ?? 0} KB, " +

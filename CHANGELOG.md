@@ -5,6 +5,24 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.3] - 2026-08-14
+
+### Changed
+
+- **The timing readout now names the baker that actually ran.** It said "local" whenever a JS
+  engine was installed, which is a different question from which baker served the rebuild — and
+  that difference is very likely the whole of "the model only moves when I let go".
+
+  A server bake is a web request. Its `await` cannot complete while IMGUI holds a drag loop, so
+  `_rebuilding` stays set for the length of the drag and every later knob change is dropped on
+  the floor. A locally baked asset has no such await and updates continuously. Two attempts at
+  fixing the *scheduling* could not help, because the rebuild was starting and then not
+  finishing.
+
+  If the readout says `server` while you drag, that is the answer, and the next question is why
+  the local baker declined the asset — it refuses rigged models, and it also remembers assets
+  whose module failed once and never retries them.
+
 ## [0.15.2] - 2026-08-14
 
 ### Fixed
