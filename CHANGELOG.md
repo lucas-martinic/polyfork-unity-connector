@@ -5,6 +5,30 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.2] - 2026-08-14
+
+### Fixed
+
+- **`toNonIndexed(): BufferGeometry is already non-indexed` filled the Console.** three.js emits
+  it whenever a module normalises geometry that was already flat, PuerTS routes `console.warn`
+  into Unity's Console, and local baking now actually runs — so it arrived once per mesh per
+  bake, and dragging a slider buried everything else.
+
+  The bridge drops that exact message. Matched on its text rather than by silencing
+  `console.warn`, because a warning nobody has read and decided about should still get through.
+
+### Note: the 500s were the server, and so was the empty gallery
+
+  `[Polyfork] could not read the remix allowance … 500` and the gallery needing a Refresh were
+  the same fault, and it was not in the connector: polyfork.dev ran `pm.max_children = 5`, and
+  PHP-FPM logged "server reached pm.max_children" at exactly the times the connector was in use.
+
+  The connector opens the catalogue and its thumbnails together and peaks around ten requests a
+  second, so a five-worker pool rejected some of them outright — `/api/me` became the allowance
+  warning, `/api/assets` became a gallery with nothing in it. Raised to 16, which costs about
+  176 MB at full load against 11 MB per worker. Verified with 40 concurrent requests across both
+  endpoints: all 200, memory unchanged.
+
 ## [0.18.1] - 2026-08-14
 
 ### Fixed

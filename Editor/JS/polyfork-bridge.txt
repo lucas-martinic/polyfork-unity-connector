@@ -10,6 +10,33 @@
 //
 // Shipped as .txt so Unity imports it as a TextAsset rather than trying to compile it.
 
+/* three.js warnings that say a no-op happened, dropped before they reach the host.
+ *
+ * PuerTS routes console.warn into Unity's Console, so `toNonIndexed(): BufferGeometry is
+ * already non-indexed` - which three.js emits when a module normalises geometry that was
+ * already flat - arrived once per mesh per bake. Dragging a slider filled the Console with
+ * it, and a Console full of harmless warnings is a Console nobody reads the real one in.
+ *
+ * Matched on the exact text, not by silencing console.warn: a warning we have not read and
+ * decided about should still get through. Fix these in the modules and the entries go away.
+ */
+(function () {
+  var benign = [
+    'THREE.BufferGeometry.toNonIndexed(): BufferGeometry is already non-indexed',
+  ];
+  var warn = globalThis.console && globalThis.console.warn;
+  if (typeof warn !== 'function') return;
+
+  globalThis.console.warn = function (first) {
+    if (typeof first === 'string') {
+      for (var i = 0; i < benign.length; i++) {
+        if (first.indexOf(benign[i]) !== -1) return;
+      }
+    }
+    return warn.apply(globalThis.console, arguments);
+  };
+})();
+
 globalThis.__polyfork = (function () {
   const modules = Object.create(null);
 
