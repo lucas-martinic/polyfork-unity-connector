@@ -462,6 +462,7 @@ namespace Polyfork.EditorTools
 
         void QueuePreviewRebuild(bool immediate = false)
         {
+            var alreadyPending = _previewDirty;
             _previewDirty = true;
 
             /* The 250 ms wait exists to keep a slider drag from becoming forty metered HTTP
@@ -470,7 +471,19 @@ namespace Polyfork.EditorTools
              * the web viewer re-runs the module on every input event and feels continuous
              * because of it. */
             var delay = immediate || !MeteredFor(_selected) ? 0d : 0.25d;
-            _rebuildAt = EditorApplication.timeSinceStartup + delay;
+            var due = EditorApplication.timeSinceStartup + delay;
+
+            /* THROTTLE, not debounce. This used to assign the deadline unconditionally, which
+             * pushes it forward on every input - and a deadline that moves with the input
+             * never arrives while the input keeps coming. Dragging a slider therefore rebuilt
+             * nothing at all until you paused or let go, which is the whole of "it only
+             * updates when I stop moving".
+             *
+             * Keeping the EARLIEST pending deadline turns the same 250 ms into a cap on how
+             * often a metered rebuild fires, so the model follows the slider at four frames a
+             * second instead of waiting for silence. The local path is unaffected: its delay
+             * is zero either way. */
+            if (!alreadyPending || due < _rebuildAt) _rebuildAt = due;
         }
 
         /// <summary>

@@ -5,6 +5,23 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.2] - 2026-08-14
+
+### Fixed
+
+- **The model still only updated when the slider stopped.** The scheduler was a debounce: every
+  knob change assigned `_rebuildAt = now + delay`, pushing the deadline forward. A deadline that
+  moves with the input never arrives while the input keeps coming, so a continuous drag rebuilt
+  nothing at all until you paused or let go.
+
+  It keeps the earliest pending deadline now, which makes the same 250 ms a cap on how often a
+  metered rebuild fires rather than a wait for silence. The local path is unaffected either way,
+  since its delay is zero.
+
+  This is the second half of the same report as 0.15.1: that fixed *starting* the rebuild during
+  a drag, and this fixes *scheduling* one. Both had to be wrong for the symptom to survive the
+  first fix, which is why it did.
+
 ## [0.15.1] - 2026-08-14
 
 ### Fixed
