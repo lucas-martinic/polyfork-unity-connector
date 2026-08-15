@@ -1,6 +1,6 @@
 {
   "name": "dev.polyfork.unity-connector",
-  "version": "0.15.4",
+  "version": "0.16.0",
   "displayName": "Polyfork for Unity",
   "description": "The Polyfork store, inside Unity. Browse the polyfork.dev catalogue in an editor window, turn the same typed knobs the web viewer exposes, preview the result live, and import it into your project as a .glb with your colours baked in. Also ships a runtime API for streaming and remixing assets at play time. Every parameter name, label, range, option and palette is read from Polyfork's own machine-readable schema - nothing is invented client-side.",
   "unity": "6000.0",

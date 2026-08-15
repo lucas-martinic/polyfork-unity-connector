@@ -5,6 +5,37 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0] - 2026-08-14
+
+### Added
+
+- **Range knobs interpolate instead of rebuilding, the way the web viewer does.** The first time
+  you drag a range knob, the editor bakes its two endpoints once and compares them. If the knob
+  only moves vertices, every later drag is a vertex lerp: no bake, no request, and the geometry
+  follows the slider exactly.
+
+  It has to be measured rather than read off the schema, because the same knob name deforms one
+  asset and re-topologises another. Anything that changes topology is left alone and keeps
+  rebuilding.
+
+  This is why some assets followed the slider and others only moved on release: the ones that
+  bake locally were fast enough to keep up and the ones falling back to the server were not.
+  A morphed knob removes the distinction, and gets *cheaper* the larger the model is — the
+  opposite of the rebuild path, where the pirate ship costs the most.
+
+  Morph sets are dropped whenever anything else rebuilds the base geometry, since the endpoints
+  were measured against the other knobs as they stood.
+
+### Fixed
+
+- **A 0–1 range knob had two positions.** The count heuristic — whole endpoints, span of 8 or
+  less — matched `0..1`, so a fraction was snapped to integers and nothing between the ends
+  could be baked. Everything in the reef kit had a two-step slider because of it, including
+  Tube Sponge's reef health. A count now needs a span of at least 2; two states are a toggle.
+
+  Fixed on the server first, in `remix_snap`, which is the authority and had the same rule —
+  so this was a two-position slider on polyfork.dev as well. The client mirrors it.
+
 ## [0.15.4] - 2026-08-14
 
 ### Removed

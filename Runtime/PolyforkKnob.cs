@@ -103,8 +103,14 @@ namespace Polyfork
 
             value = Mathf.Clamp(value, Min, Max);
 
-            // A count-style range (portholes, windows, steps) only has integer geometry.
-            var isCount = IsWhole(Min) && IsWhole(Max) && Max - Min <= 8f;
+            /* A count-style range (portholes, windows, steps) only has integer geometry.
+             * Mirrors remix_snap on the server, which is the authority.
+             *
+             * A span of 1 is NOT a count. 0..1 is how a fraction is declared - reef health,
+             * wear, openness - and both endpoints being whole made it look like a two-value
+             * count, so the slider had two positions and nothing between them could be baked.
+             * A real count needs three values to be worth counting; two states are a toggle. */
+            var isCount = IsWhole(Min) && IsWhole(Max) && Max - Min <= 8f && Max - Min >= 2f;
             var step = isCount ? 1d : (Max - Min) / 40d;
 
             /* Away from zero, not to even. PHP rounds 10.5 up and .NET rounds it down to

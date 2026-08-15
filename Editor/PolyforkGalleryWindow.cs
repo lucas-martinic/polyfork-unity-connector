@@ -61,6 +61,16 @@ namespace Polyfork.EditorTools
         /// whenever an engine existed, which is not the same question.</summary>
         string _lastBakerName;
 
+        /* MORPHS: range knobs that only move vertices, driven by interpolation instead of a
+         * rebuild. Measured once per knob by baking its two endpoints and comparing vertex
+         * counts - which has to be measured rather than read off the schema, because the same
+         * knob name deforms one asset and re-topologises another.
+         *
+         * This is what the web viewer does, and why dragging a slider there is continuous
+         * while dragging one here was a series of rebuilds with nothing in between. */
+        readonly Dictionary<string, PolyforkMorphSet> _morphs = new();
+        readonly HashSet<string> _measuring = new();
+
         // ---- filters --------------------------------------------------------
         string _search = "";
         string _kit = "All kits";
@@ -400,6 +410,8 @@ namespace Polyfork.EditorTools
             _remixing = false;             // a new asset means back to browsing
             _history.Clear();              // undo is per-asset; don't step back into another
             _ranges.Clear();
+            _morphs.Clear();
+            _measuring.Clear();
             _choices.Clear();
             _toggles.Clear();
             _slotColors.Clear();
@@ -464,8 +476,100 @@ namespace Polyfork.EditorTools
             }
         }
 
+        /// <summary>Puts a freshly built model on screen, with its colours and framing.</summary>
+        void AdoptPreview(GameObject go, PolyforkAsset asset, bool frame)
+        {
+            _previewSlots = _schema != null ? PolyforkColorSlots.Build(go, _schema) : null;
+            if (_slotColors.Count > 0) _previewSlots?.Apply(_slotColors);
+
+            _preview.SetTarget(go, frameCamera: frame);
+            _previewedAssetId = asset.Id;
+        }
+
+        /// <summary>Bakes this asset with one knob overridden, for morph measurement.</summary>
+        async Task<GameObject> BakeAtAsync(PolyforkKnob knob, float value, CancellationToken ct)
+        {
+            var values = BuildAllValues();
+            values.SetNumber(knob.Name, knob.SnapToServerGrid(value));
+
+            var baker = _bakers.Resolve(_selected, _schema) ?? _bakers.Bakers.FirstOrDefault();
+            if (baker == null) return null;
+
+            return await baker.BakeAsync(new PolyforkBakeRequest(_selected, _schema, values), ct);
+        }
+
+        /// <summary>
+        /// Works out whether a range knob can be interpolated, by baking its endpoints once.
+        ///
+        /// Two bakes, then the knob is free forever: dragging it stops being a rebuild per step
+        /// and becomes a vertex lerp, which is both smooth and cheaper the LARGER the model is -
+        /// the opposite of the rebuild path, where the pirate ship costs most.
+        ///
+        /// The min bake owns the meshes the morph writes into, so it becomes the displayed
+        /// model. Anything that re-topologises is left alone and keeps rebuilding.
+        /// </summary>
+        async Task MeasureMorphAsync(PolyforkKnob knob)
+        {
+            var asset = _selected;
+            if (asset == null || knob == null || !_measuring.Add(knob.Name)) return;
+
+            GameObject atMin = null, atMax = null;
+            try
+            {
+                atMin = await BakeAtAsync(knob, knob.Min, _cts.Token);
+                atMax = await BakeAtAsync(knob, knob.Max, _cts.Token);
+                if (atMin == null || atMax == null || _selected != asset) return;
+
+                var set = PolyforkMorphSet.Build(atMin, atMax, knob.Name, knob.Min, knob.Max);
+                if (!set.IsMorphable) return;
+
+                _morphs[knob.Name] = set;
+
+                AdoptPreview(atMin, asset, frame: false);
+                atMin = null;                       // the preview owns it now
+
+                set.Apply(_ranges.TryGetValue(knob.Name, out var v) ? v : knob.DefaultFloat);
+                Repaint();
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Polyfork] could not measure '{knob.Name}' for morphing: {e.Message}");
+            }
+            finally
+            {
+                _measuring.Remove(knob.Name);
+                if (atMin != null) DestroyImmediate(atMin);
+                if (atMax != null) DestroyImmediate(atMax);
+            }
+        }
+
+        /// <summary>
+        /// Drops every morph set, or all but one.
+        ///
+        /// A morph is measured against whatever the OTHER knobs were at the time, so anything
+        /// that rebuilds the base geometry makes the endpoints stale. Keeping the knob being
+        /// dragged is what stops a drag from invalidating itself.
+        /// </summary>
+        void InvalidateMorphs(string except = null)
+        {
+            if (except == null) { _morphs.Clear(); return; }
+
+            foreach (var name in _morphs.Keys.Where(k => k != except).ToArray())
+                _morphs.Remove(name);
+        }
+
         void QueuePreviewRebuild(bool immediate = false)
         {
+            /* Every structural change - a choice, a toggle, a new asset - comes through here
+             * with immediate:true, and every one of them rebuilds the base geometry that the
+             * morph endpoints were measured against. One place to drop them, rather than a
+             * call the next knob handler forgets. The range path passes immediate:false and
+             * keeps its own knob, or a drag would invalidate itself. */
+            if (immediate) InvalidateMorphs();
+
             var alreadyPending = _previewDirty;
             _previewDirty = true;
 
@@ -644,14 +748,9 @@ namespace Polyfork.EditorTools
 
                 // Colours are applied locally: the remix endpoint does not bake them.
                 // Keep the binding so later colour edits skip the network entirely.
-                _previewSlots = _schema != null ? PolyforkColorSlots.Build(go, _schema) : null;
-                if (_slotColors.Count > 0) _previewSlots?.Apply(_slotColors);
-
                 // Only re-frame when the asset itself changed. A knob-driven rebuild must
                 // keep the user's zoom, so a geometry change reads as the model resizing.
-                var sameAsset = _previewedAssetId == asset.Id;
-                _preview.SetTarget(go, frameCamera: !sameAsset);
-                _previewedAssetId = asset.Id;
+                AdoptPreview(go, asset, frame: _previewedAssetId != asset.Id);
             }
             catch (OperationCanceledException)
             {
@@ -1413,7 +1512,23 @@ namespace Polyfork.EditorTools
 
             RecordUndo($"range:{knob.Name}");    // coalesced, so a whole drag is one step
             _ranges[knob.Name] = next;
-            QueuePreviewRebuild();               // debounced: geometry needs a round trip
+
+            /* A measured knob is a vertex lerp: no bake, no request, no waiting for a drag to
+             * end. This is the difference between a slider that drives the model and one that
+             * queues work behind itself, and it is what the web viewer has always done. */
+            if (_morphs.TryGetValue(knob.Name, out var morph) && morph is { IsMorphable: true })
+            {
+                morph.Apply(next);
+                Repaint();
+                return;
+            }
+
+            /* Not measured yet. Rebuild as before so something moves now, and find out in the
+             * background whether this knob can be morphed - two bakes, once, after which the
+             * branch above takes over for the rest of the session. */
+            InvalidateMorphs(except: knob.Name);
+            QueuePreviewRebuild();
+            _ = MeasureMorphAsync(knob);
         }
 
         void DrawImportSection()
