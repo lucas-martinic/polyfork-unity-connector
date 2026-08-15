@@ -5,6 +5,21 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.1] - 2026-08-14
+
+### Fixed
+
+- **The model only rebuilt when you let go of the slider.** The rebuild was kicked from
+  `EditorApplication.update`, and dragging an IMGUI control runs a drag loop that starves the
+  editor tick — so nothing started until the drag ended. The bake was never the problem: it
+  measures 20 to 140 ms end to end. It simply was not being asked for until too late. `OnGUI`
+  now kicks a pending rebuild as well, so the geometry follows the slider.
+
+- **Camera damping was frame-rate dependent**, and the editor is not 60fps. A fixed fraction
+  per editor tick made a glide that ran for as long as the ticks took, which read as the whole
+  preview having got slower. It is exponential smoothing against real elapsed time now, so it
+  settles in about a sixth of a second whatever the tick rate.
+
 ## [0.15.0] - 2026-08-14
 
 ### Fixed

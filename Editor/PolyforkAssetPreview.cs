@@ -48,9 +48,19 @@ namespace Polyfork.EditorTools
         /// <summary>The distance Frame() chose, which the zoom clamps are expressed against.</summary>
         float _frameDistance = 2.2f;
 
-        // OrbitControls' own default. Applied per editor tick rather than per rendered frame,
-        // which is close enough at tick rates and avoids a repaint loop that never settles.
-        const float Damping = 0.18f;
+        /* Time based, not per tick.
+         *
+         * This was a fixed fraction applied per editor tick, on the reasoning that a tick is
+         * near enough a frame. It is not: OrbitControls damps per RENDERED frame at 60fps,
+         * while EditorApplication.update runs slower and at a rate that changes with what the
+         * editor is doing. The same constant therefore became a long floaty glide, which read
+         * as the whole preview having got slower.
+         *
+         * Exponential smoothing against real elapsed time settles in the same wall-clock time
+         * whatever the tick rate. Tau is the time to close ~63% of the gap; 0.05 s puts a full
+         * settle inside about a sixth of a second, which is where OrbitControls lands. */
+        const float DampingTau = 0.05f;
+        double _lastSettle;
 
         // viewer.js: controls.minDistance = d * 0.35, controls.maxDistance = d * 2.5.
         const float MinZoom = 0.35f;
@@ -188,6 +198,14 @@ namespace Polyfork.EditorTools
         /// </summary>
         public bool Settle()
         {
+            var now = EditorApplication.timeSinceStartup;
+            var dt = _lastSettle > 0d ? (float)(now - _lastSettle) : 0f;
+            _lastSettle = now;
+
+            // A tick after a domain reload or a long stall can report a huge delta; clamping
+            // keeps that from teleporting the camera.
+            dt = Mathf.Clamp(dt, 0f, 0.1f);
+
             var dOrbit = _orbitTarget - _orbit;
             var dDist = _distanceTarget - _distance;
 
@@ -200,8 +218,9 @@ namespace Polyfork.EditorTools
                 return false;
             }
 
-            _orbit += dOrbit * Damping;
-            _distance += dDist * Damping;
+            var k = 1f - Mathf.Exp(-dt / DampingTau);
+            _orbit += dOrbit * k;
+            _distance += dDist * k;
             return true;
         }
 

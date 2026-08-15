@@ -266,6 +266,31 @@ namespace Polyfork.EditorTools
             PolyforkApiKeyWindow.OpenRateLimited(e.RetryAfter);
         }
 
+        /// <summary>
+        /// Starts a pending rebuild if one is due.
+        ///
+        /// Called from the editor tick AND from OnGUI, which is the difference between a model
+        /// that follows the slider and one that jumps when you let go. Dragging an IMGUI
+        /// control runs a drag loop that starves EditorApplication.update, so a rebuild kicked
+        /// only from the tick does not start until the drag ends - the bake was already fast
+        /// enough, it simply was not being asked for until too late.
+        /// </summary>
+        void KickPendingRebuild()
+        {
+            // Geometry rebuilds need the network, so hold them while capped rather than firing
+            // requests that can only fail. Colour edits are local and unaffected.
+            /* Gated on whether this particular rebuild would spend anything. An asset at its
+             * defaults is a plain file fetch, so it must still load when the allowance is
+             * gone - otherwise running out of bakes leaves the gallery unable to show anything
+             * at all, which is how "No preview" happened to assets that were free to display. */
+            if (!_previewDirty || _rebuilding) return;
+            if (EditorApplication.timeSinceStartup < _rebuildAt) return;
+            if (BlockedByAllowance && BuildGeometryValues().Count > 0) return;
+
+            _previewDirty = false;
+            _ = RebuildPreviewAsync();
+        }
+
         void OnEditorUpdate()
         {
             // Drives the camera glide, and repaints only while it is still gliding.
@@ -278,14 +303,7 @@ namespace Polyfork.EditorTools
              * gone - otherwise running out of bakes leaves the gallery unable to show
              * anything at all, which is how "No preview" happened to assets that were free
              * to display. */
-            var wouldMeter = BlockedByAllowance && BuildGeometryValues().Count > 0;
-
-            if (_previewDirty && !_rebuilding && !wouldMeter &&
-                EditorApplication.timeSinceStartup >= _rebuildAt)
-            {
-                _previewDirty = false;
-                _ = RebuildPreviewAsync();
-            }
+            KickPendingRebuild();
 
             /* Keep the countdown ticking, four times a second rather than on every editor
              * update. Repaint re-renders the 3D preview, so doing it at tick rate burns a
@@ -735,6 +753,9 @@ namespace Polyfork.EditorTools
             // Asks once, and only while no answer has ever arrived. OnEnable starts the load;
             // this is what covers the case where that attempt was cancelled before it landed.
             if (!_catalogueSettled && !_loading) _ = LoadCatalogueAsync();
+
+            // See KickPendingRebuild: the editor tick alone does not survive a slider drag.
+            KickPendingRebuild();
 
             HandleUndoCommands();
 
