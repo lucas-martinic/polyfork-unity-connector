@@ -108,9 +108,63 @@ namespace Polyfork
             return root;
         }
 
+        /// <summary>
+        /// Writes this payload into a model that is already on screen, instead of building a
+        /// replacement.
+        ///
+        /// A rebuild used to mean: allocate a Mesh per part, upload it, build GameObjects,
+        /// then destroy the previous set. Dragging a knob that re-topologises did all of that
+        /// per step, and it is the whole of why the editor felt heavier than the web viewer,
+        /// which re-runs the module and hands three.js the same BufferGeometry back.
+        ///
+        /// Mesh.Clear keeps the object and its buffers and only resizes what changed, so a
+        /// vertex count that moves between steps - which is exactly what a re-topologising
+        /// knob does - costs a resize rather than an allocation, a destroy and a fresh upload.
+        ///
+        /// Returns false and touches NOTHING when the shape of the model does not match, so
+        /// the caller can fall back to building one. Structure is compared by part count and
+        /// name: same parts in the same order is the case worth optimising, and anything else
+        /// is a different model wearing the same asset id.
+        /// </summary>
+        public bool TryApplyTo(GameObject root)
+        {
+            if (root == null || Meshes.Count == 0) return false;
+
+            var filters = root.GetComponentsInChildren<MeshFilter>(true);
+            if (filters.Length != Meshes.Count) return false;
+
+            for (var i = 0; i < filters.Length; i++)
+            {
+                var mesh = filters[i].sharedMesh;
+                if (mesh == null) return false;              // Unity's ==, so destroyed counts
+
+                var expected = string.IsNullOrEmpty(Meshes[i].Name) ? $"mesh{i}" : Meshes[i].Name;
+                if (filters[i].gameObject.name != expected) return false;
+            }
+
+            for (var i = 0; i < filters.Length; i++)
+            {
+                var entry = Meshes[i];
+                Fill(filters[i].sharedMesh, entry);
+                ApplyMatrix(filters[i].transform, entry.Matrix);
+            }
+
+            return true;
+        }
+
         static Mesh BuildMesh(Entry entry)
         {
             var mesh = new Mesh { name = string.IsNullOrEmpty(entry.Name) ? "PolyforkMesh" : entry.Name };
+            Fill(mesh, entry);
+            return mesh;
+        }
+
+        /// <summary>Writes one entry into a mesh, new or reused.</summary>
+        static void Fill(Mesh mesh, Entry entry)
+        {
+            /* Clear first. Without it a mesh that shrinks keeps triangle indices pointing past
+             * the end of the new vertex array, and Unity rejects the whole assignment. */
+            mesh.Clear();
 
             // Polyfork geometry routinely exceeds 65k vertices once knobs raise part counts.
             if (entry.Positions.Length > ushort.MaxValue)
@@ -135,7 +189,6 @@ namespace Polyfork
             else mesh.RecalculateNormals();   // per-face, since no vertex is shared
 
             mesh.RecalculateBounds();
-            return mesh;
         }
 
         static void ApplyMatrix(Transform t, Matrix4x4 m)

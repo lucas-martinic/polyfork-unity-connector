@@ -714,7 +714,15 @@ namespace Polyfork.EditorTools
                 if (baker == null) return;
 
                 _lastBakerName = baker.Name;
-                var request = new PolyforkBakeRequest(asset, _schema, payload);
+
+                /* Offer the model already on screen as somewhere to write, but only for the
+                 * SAME asset - handing a baker the previous asset's model would rewrite the
+                 * thing the user is still looking at. The baker checks the shape matches and
+                 * builds a new one if not, so this is an optimisation and never a contract. */
+                var request = new PolyforkBakeRequest(asset, _schema, payload)
+                {
+                    Reuse = _previewedAssetId == asset.Id ? _preview.Target : null,
+                };
                 var meters = baker.ConsumesAllowance && payload.Count > 0;
 
                 GameObject go;
@@ -773,6 +781,23 @@ namespace Polyfork.EditorTools
 
                 // Colours are applied locally: the remix endpoint does not bake them.
                 // Keep the binding so later colour edits skip the network entirely.
+                /* Written in place: nothing to adopt, nothing to destroy, and nothing to
+                 * re-bind. Morph sets still go, because their meshes now hold different
+                 * geometry than the one they were measured from - stale rather than
+                 * destroyed, which is the quieter and worse failure. */
+                if (ReferenceEquals(go, _preview.Target))
+                {
+                    InvalidateMorphs();
+
+                    /* Rebind rather than reuse the binding. Slots are indices into the mesh's
+                     * colour array, and the knobs worth reusing a model for are exactly the
+                     * ones that change how many vertices there are - so the old indices can
+                     * point past the end. Cheap next to a bake, and wrong if skipped. */
+                    _previewSlots = _schema != null ? PolyforkColorSlots.Build(go, _schema) : null;
+                    if (_slotColors.Count > 0) _previewSlots?.Apply(_slotColors);
+                    return;
+                }
+
                 // Only re-frame when the asset itself changed. A knob-driven rebuild must
                 // keep the user's zoom, so a geometry change reads as the model resizing.
                 AdoptPreview(go, asset, frame: _previewedAssetId != asset.Id);

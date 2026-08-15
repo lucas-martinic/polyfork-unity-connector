@@ -5,6 +5,27 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0] - 2026-08-14
+
+### Changed
+
+- **A rebuild writes into the model already on screen instead of replacing it.** Every step of a
+  drag used to allocate a `Mesh` per part, upload it, build GameObjects, and then destroy the
+  previous set. That is the whole of why the editor felt heavier than the web viewer, which
+  re-runs the module and hands three.js the same geometry object back.
+
+  `PolyforkMeshPayload.TryApplyTo` clears and refills the existing meshes, so a vertex count
+  that moves between steps — exactly what a re-topologising knob does — costs a resize rather
+  than an allocation, a destroy and a fresh upload. `PolyforkBakeRequest.Reuse` carries the
+  offer; a baker that ignores it, or finds the shape no longer matches, returns a new
+  GameObject and the caller swaps as before. It can only be faster or identical.
+
+  The gallery offers the on-screen model only for the same asset, and when a bake comes back
+  written in place it skips the swap, the destroy and the re-frame entirely.
+
+  Colour slots are rebound even so: a slot is an index into the mesh's colour array, and the
+  knobs worth reusing a model for are precisely the ones that change how many vertices exist.
+
 ## [0.16.2] - 2026-08-14
 
 ### Fixed

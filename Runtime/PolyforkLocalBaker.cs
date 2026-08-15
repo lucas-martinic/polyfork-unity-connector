@@ -186,6 +186,12 @@ namespace Polyfork
                     $"{payloadJson.Length / 1024} KB). A server bake is about 120 ms.");
             }
 
+            /* Write into what is already on screen when the shape still matches. Same meshes,
+             * same GameObjects, no destroy - which is what the web viewer effectively does by
+             * handing three.js its geometry back. Falls through to building one whenever the
+             * model changed shape, so this can only ever be faster or identical. */
+            if (request.Reuse != null && payload.TryApplyTo(request.Reuse)) return request.Reuse;
+
             return payload.ToGameObject(CreateMaterial(), request.Parent, $"Polyfork_{request.Asset.Id}");
         }
 

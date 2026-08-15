@@ -67,6 +67,16 @@ namespace Polyfork
         /// <summary>Optional parent for the created object.</summary>
         public Transform Parent;
 
+        /// <summary>
+        /// A model already on screen that this bake may write into instead of replacing.
+        ///
+        /// Optional, and only ever an optimisation: a baker that ignores it, or finds the
+        /// shape no longer matches, returns a new GameObject and the caller swaps as before.
+        /// Set it and a knob that re-topologises costs a resize rather than an allocation, a
+        /// destroy and a fresh upload on every step.
+        /// </summary>
+        public GameObject Reuse { get; set; }
+
         public PolyforkBakeRequest(
             PolyforkAsset asset, PolyforkParams schema, PolyforkKnobValues values, Transform parent = null)
         {

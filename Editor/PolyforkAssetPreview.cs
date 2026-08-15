@@ -30,6 +30,9 @@ namespace Polyfork.EditorTools
         /// <summary>Matches the key light set up in EnsureUtility: it sits at (4, 7, 5).</summary>
         static readonly Vector4 KeyLightDirection = new Vector3(4f, 7f, 5f).normalized;
         GameObject _target;
+
+        /// <summary>The model on screen, offered to a baker as somewhere to write.</summary>
+        public GameObject Target => _target;
         /* x is yaw, y is PITCH, and pitch is applied as Quaternion.Euler(pitch, yaw, 0) -
          * so a negative pitch puts the camera below the model looking up, which is where it
          * used to start. Product shots look slightly down at the subject. */
