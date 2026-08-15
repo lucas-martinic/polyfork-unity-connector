@@ -304,12 +304,13 @@ namespace Polyfork.EditorTools
 
             GUI.DrawTexture(rect, texture, ScaleMode.StretchToFill, false);
 
-            if (busy)
-            {
-                var badge = new Rect(rect.x + 6f, rect.y + 6f, 84f, 16f);
-                EditorGUI.DrawRect(badge, new Color(0f, 0f, 0f, 0.55f));
-                GUI.Label(badge, " rebuilding…", EditorStyles.miniLabel);
-            }
+            /* No "rebuilding" badge.
+             *
+             * It was there for a rebuild that took long enough to need explaining. They take
+             * tens of milliseconds, so what it actually did was flash a dark box over the
+             * corner of the model on every knob change - drawing the eye to the one thing on
+             * screen that is not the model, exactly while you are looking at the model. The
+             * status bar already carries the timing for anyone who wants it. */
         }
 
         void HandleInput(Rect rect)

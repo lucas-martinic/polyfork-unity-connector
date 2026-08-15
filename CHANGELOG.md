@@ -5,6 +5,19 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.4] - 2026-08-14
+
+### Removed
+
+- **The "rebuilding" badge over the top-left of the preview.** It was written for a rebuild slow
+  enough to need explaining; they take tens of milliseconds, so all it did was flash a dark box
+  across the corner of the model on every knob change — drawing the eye to the one thing on
+  screen that is not the model, at the exact moment you are watching the model. The status bar
+  still carries the timing.
+
+  The empty state keeps it: with no preview to show at all, "Rebuilding…" says more than
+  "No preview".
+
 ## [0.15.3] - 2026-08-14
 
 ### Changed
