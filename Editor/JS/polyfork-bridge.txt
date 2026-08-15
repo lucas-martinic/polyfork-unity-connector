@@ -36,12 +36,31 @@ globalThis.__polyfork = (function () {
   // into plain script that builds __exports. Evaluating it in a function scope keeps each
   // asset's declarations from colliding, and injects the one dependency they all share.
   function registerSource(id, src) {
-    var factory = new Function('THREE', 'mergeGeometries', src + '\n;return __exports;');
-    var exports = factory(globalThis.THREE, globalThis.THREE.mergeGeometries);
-    if (!exports || typeof exports.createAsset !== 'function') {
+    /* No named parameters beyond THREE.
+     *
+     * This used to take `mergeGeometries` as a second parameter and pass
+     * globalThis.THREE.mergeGeometries, which does not exist - it lives in
+     * BufferGeometryUtils, not in THREE. So it passed undefined, and worse, the PARAMETER
+     * SHADOWED the real global for the whole module body: defining mergeGeometries properly
+     * in the runtime would still not have reached the 518 modules that use it.
+     *
+     * The runtime defines every name a stripped import would have bound, as a global. Letting
+     * the body see those globals is the whole contract, so nothing may shadow them. */
+    var factory = new Function('THREE', src + '\n;return __exports;');
+    var exports = factory(globalThis.THREE);
+
+    /* `export default createAsset` is as valid as `export const createAsset`, and three
+     * published modules use it - pie among them, which has knobs and a params.json and simply
+     * could not bake locally because of the shape of its export. */
+    var create = exports && (typeof exports.createAsset === 'function'
+      ? exports.createAsset
+      : (typeof exports.default === 'function' ? exports.default : null));
+
+    if (!create) {
       throw new Error('module ' + id + ' exposes no createAsset');
     }
-    modules[id] = exports;
+
+    modules[id] = exports.createAsset === create ? exports : Object.assign({}, exports, { createAsset: create });
   }
 
   function has(id) {

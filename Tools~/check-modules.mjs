@@ -19,14 +19,19 @@ function toScript(src){const out=['var __exports = {};'];const ex=[];
   else if(tr.startsWith('export ')){const r=tr.slice(7);const m=r.match(/^(?:const|let|var|function|class)\s+([A-Za-z0-9_$]+)/);line=r;if(m)ex.push(m[1]);}
   out.push(line);} for(const n of ex)out.push(`__exports.${n} = ${n};`); return out.join('\n');}
 const bundle=fs.readFileSync('/root/apps/polyfork-unity-connector/Editor/JS/three-runtime.txt','utf8');
+const bridge=fs.readFileSync('/root/apps/polyfork-unity-connector/Editor/JS/polyfork-bridge.txt','utf8');
 const root='/root/apps/threejs-3d-assets/data/assets';
 const fails={};let ok=0,n=0;
 for(const id of fs.readdirSync(root)){
   const f=path.join(root,id,'asset.public.mjs'); if(!fs.existsSync(f))continue; n++;
-  const ctx={console:{log(){},warn(){},error(){}}}; vm.createContext(ctx);
+  const ctx={console:{log(){},warn(){},error(){}},Buffer}; vm.createContext(ctx);
   try{ vm.runInContext(bundle+'\n;globalThis.THREE=THREE;',ctx);
-       vm.runInContext(`(function(){ ${toScript(fs.readFileSync(f,'utf8'))}\n globalThis.__ca=__exports.createAsset; })()`,ctx);
-       ctx.__ca({}); ok++; }
+       // The editor evaluates a __btoa polyfill before the bridge, because QuickJS has none.
+       ctx.__btoa = s => Buffer.from(Uint8Array.from(s, c => c.charCodeAt(0) & 0xff)).toString('base64');
+       vm.runInContext(bridge,ctx);
+       vm.runInContext(`globalThis.__polyfork.__registerSource(${JSON.stringify(id)}, ${JSON.stringify(toScript(fs.readFileSync(f,'utf8')))})`,ctx);
+       vm.runInContext(`globalThis.__out = __polyfork.bake(${JSON.stringify(id)}, '{}')`,ctx);
+       if(!ctx.__out) throw new Error('bake returned nothing'); ok++; }
   catch(e){ (fails[e.message] ||= []).push(id); }
 }
 console.log(`modules tested: ${n}, built: ${ok}, failed: ${n-ok}`);

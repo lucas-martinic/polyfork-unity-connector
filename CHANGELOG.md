@@ -5,6 +5,35 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.1] - 2026-08-14
+
+### Fixed
+
+- **The bridge shadowed the very globals the new runtime defines.** `registerSource` built the
+  module factory as `new Function('THREE', 'mergeGeometries', …)` and called it with
+  `globalThis.THREE.mergeGeometries` — which does not exist, because that helper lives in
+  `BufferGeometryUtils`, not in `THREE`. So it passed `undefined`, and the *parameter* then
+  shadowed the real global for the whole module body.
+
+  Which means 0.18.0 on its own would not have fixed the 518 modules that use it: the runtime
+  would have defined `mergeGeometries` correctly and the bridge would have hidden it again. The
+  factory takes `THREE` and nothing else now; every other name a stripped import would have
+  bound is a global, and nothing may shadow one.
+
+- **`export default createAsset` is accepted.** Three published modules use it, `pie` among
+  them — which has knobs and a `params.json` and simply could not bake locally because of the
+  shape of its export.
+
+### Changed
+
+- `Tools~/check-modules.mjs` runs each module through the **real bridge** now — runtime, then
+  the `__btoa` polyfill, then `registerSource` and `bake` — rather than evaluating the
+  transformed source directly. The direct version reported 576 of 578 while the editor would
+  still have failed on all of them, because it never exercised the shadowing. Testing the thing
+  that ships is the difference between a number and a measurement.
+
+  **579 of 579 published modules now build and bake.**
+
 ## [0.18.0] - 2026-08-14
 
 ### Fixed
