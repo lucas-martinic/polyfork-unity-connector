@@ -44,6 +44,19 @@ namespace Polyfork.EditorTools
         string _status = "Connecting...";
         bool _loading;
 
+        /* Whether the catalogue has been ASKED for and got an answer, success or failure.
+         *
+         * Left false by a cancelled load, which is the case that made the window open empty
+         * until you pressed Refresh: a window created and immediately re-parented runs
+         * OnDisable between the two OnEnables, the first request is cancelled through _cts,
+         * and nothing ever asked again. OnGUI retries while this is false, so the fix does
+         * not depend on knowing every way the first attempt can be lost. */
+        bool _catalogueSettled;
+
+        /// <summary>End-to-end time for the last preview rebuild, which is what a user waits
+        /// for. The baker's own figure covers the module and the decode only.</summary>
+        double _lastRebuildMs;
+
         // ---- filters --------------------------------------------------------
         string _search = "";
         string _kit = "All kits";
@@ -295,6 +308,7 @@ namespace Polyfork.EditorTools
             try
             {
                 var assets = await _client.GetAllAssetsAsync(null, _cts.Token);
+                _catalogueSettled = true;
                 _all.Clear();
                 _all.AddRange(assets);
 
@@ -313,6 +327,9 @@ namespace Polyfork.EditorTools
             }
             catch (Exception e)
             {
+                // Settled: a real failure must not become a retry loop driven by OnGUI.
+                // Refresh is still there for a network that came back.
+                _catalogueSettled = true;
                 _status = $"Could not reach polyfork.dev: {e.Message}";
             }
             finally
@@ -508,6 +525,16 @@ namespace Polyfork.EditorTools
             _rebuilding = true;
             var asset = _selected;
 
+            /* Times the whole path, not the part that is quick.
+             *
+             * The baker reports the module run and the payload decode, which together are
+             * tens of milliseconds, and the status bar was showing that as though it were
+             * the wait. Everything after it - building the meshes, swapping the preview
+             * target, freeing the previous ones - was unmeasured, so a rebuild that felt
+             * like a second still read as 21 ms. A number that describes a tenth of the
+             * work is worse than no number. */
+            var rebuildWatch = System.Diagnostics.Stopwatch.StartNew();
+
             try
             {
                 var payload = BuildAllValues();
@@ -605,6 +632,7 @@ namespace Polyfork.EditorTools
             }
             finally
             {
+                _lastRebuildMs = rebuildWatch.Elapsed.TotalMilliseconds;
                 _rebuilding = false;
                 Repaint();
             }
@@ -701,6 +729,10 @@ namespace Polyfork.EditorTools
 
         void OnGUI()
         {
+            // Asks once, and only while no answer has ever arrived. OnEnable starts the load;
+            // this is what covers the case where that attempt was cancelled before it landed.
+            if (!_catalogueSettled && !_loading) _ = LoadCatalogueAsync();
+
             HandleUndoCommands();
 
             PolyforkBrand.DrawHeader(
@@ -1498,16 +1530,30 @@ namespace Polyfork.EditorTools
                     /* The last bake's cost, on screen rather than in a log nobody opens.
                      * The split is the useful part: engine time means the module is what is
                      * slow, decode time means the payload crossing the JS boundary is. */
-                    var timing = _localBaker is { LastTotalMs: > 0d }
-                        ? $"local  ·  {_localBaker.LastTotalMs:0} ms"
+                    /* Headline the END TO END figure. The baker's own number covers the
+                     * module run and the payload decode, and everything after them - the
+                     * meshes, the preview swap, freeing the last ones - used to go
+                     * unmeasured, so a rebuild that took about a second still read as
+                     * "21 ms". The breakdown moves to the tooltip, where it answers the
+                     * next question instead of being mistaken for the answer. */
+                    var haveTiming = _lastRebuildMs > 0d;
+                    var timing = haveTiming
+                        ? $"local  ·  {_lastRebuildMs:0} ms"
                         : "local bakes  ·  unmetered";
+
+                    var rest = _localBaker != null
+                        ? _lastRebuildMs - _localBaker.LastTotalMs
+                        : _lastRebuildMs;
 
                     GUILayout.Label(
                         new GUIContent(timing,
-                            _localBaker is { LastTotalMs: > 0d }
-                                ? $"Last bake: {_localBaker.LastEngineMs:0} ms running the module, " +
-                                  $"{_localBaker.LastDecodeMs:0} ms decoding {_localBaker.LastPayloadKb} KB. " +
-                                  "A server bake is about 120 ms and spends allowance."
+                            haveTiming
+                                ? $"Last rebuild: {_lastRebuildMs:0} ms end to end — " +
+                                  $"{_localBaker?.LastEngineMs ?? 0d:0} ms running the module, " +
+                                  $"{_localBaker?.LastDecodeMs ?? 0d:0} ms decoding " +
+                                  $"{_localBaker?.LastPayloadKb ?? 0} KB, " +
+                                  $"{(rest < 0d ? 0d : rest):0} ms building the meshes and swapping " +
+                                  "the preview. A server bake is about 120 ms and spends allowance."
                                 : $"Geometry is rebuilt here by {PolyforkJsRuntimeProvider.EngineName}: " +
                                   "instant, and it spends no allowance."),
                         style);

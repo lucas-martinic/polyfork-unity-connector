@@ -5,6 +5,31 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.2] - 2026-08-14
+
+### Fixed
+
+- **The gallery opened empty until you pressed Refresh.** `OnEnable` starts the catalogue
+  load, and a window that Unity creates and immediately re-parents runs `OnDisable` between
+  its two `OnEnable`s — which cancels that request through `_cts`. The cancellation is caught
+  and ignored, correctly, and then nothing ever asked again.
+
+  Rather than chase every way a first attempt can be lost, the window now tracks whether the
+  catalogue has been *answered*, success or failure, and `OnGUI` asks again while it has not
+  been. A real failure counts as settled, so a network that is down does not become a retry
+  loop; Refresh is still there for when it comes back.
+
+### Changed
+
+- **The bake timing was measuring a tenth of the wait.** The status bar showed the baker's own
+  figure, which covers running the module and decoding its payload — tens of milliseconds — and
+  everything after that was unmeasured: building the meshes, swapping the preview target,
+  freeing the previous ones. So a rebuild that took about a second still read as "21 ms", which
+  is worse than showing nothing.
+
+  It now reports the end-to-end time, with the split in the tooltip where it answers the next
+  question instead of being mistaken for the answer.
+
 ## [0.14.1] - 2026-08-14
 
 ### Fixed
