@@ -45,7 +45,7 @@ double-click it. The git URL updates in place from `Polyfork ▸ Update Package`
 > com.unity.nuget.newtonsoft-json
 > ```
 
-Or by hand, which also lets you pin a version with `#v0.2.0`:
+Or by hand, which also lets you pin a version with `#v0.18.2`:
 
 ```jsonc
 // Packages/manifest.json
@@ -85,9 +85,9 @@ install it again, which is the same operation with more steps.
 Polyfork ▸ Browse Assets                          Ctrl/Cmd + Shift + P
 Polyfork ▸ API Key…
 Polyfork ▸ Welcome
-Polyfork ▸ Setup                                  install a JS engine for instant bakes
+Polyfork ▸ Setup                                  is local baking running, and why not
 Polyfork ▸ Update Package                         pull the newest version from GitHub
-Polyfork ▸ Diagnostics ▸ Smoke-test local baking  (needs a JS engine)
+Polyfork ▸ Diagnostics ▸ Smoke-test local baking   bake one model, print timings
 ```
 
 The gallery is also under **Window ▸ Polyfork**, where Unity users tend to look for a
@@ -130,7 +130,7 @@ Polyfork publishes four knob types, and the remix endpoint does **not** treat th
 
 | Type | Path | Cost |
 | --- | --- | --- |
-| any type with `affects: geometry` | Server rebuild via `-remix.glb?p={…}` | ~120 ms |
+| any type with `affects: geometry` | Rebuilt from the asset's own module, in the editor | ~20-140 ms |
 | `color` | Local vertex-colour slot remap | instant |
 | `choice` (colourway) | Local, expands a preset across slots | instant |
 | anything else | Not sent — see below | — |
@@ -170,7 +170,8 @@ A knob that does not declare `affects: geometry` and is not a colour cannot be h
 from a GLB: the endpoint drops it, and there is no local equivalent. Those are not drawn,
 rather than shown as controls that do nothing, and the gallery says how many there were.
 
-The asset's own module honours all of them, which is what the *Local Baking* sample is for.
+The asset's own module honours all of them, and the editor runs that module directly, so a
+local rebuild is not limited this way.
 
 Classification lives in one place, `PolyforkParams.Classify`. If the platform's behaviour
 changes again, that is the only thing to edit — `PolyforkServerBaker` reads its verdict
@@ -201,7 +202,7 @@ catalog.Loaded += async () =>
 {
     var remixable = await PolyforkSpawner.SpawnAsync(catalog, catalog.Next());
     remixable.SetColorway("colorway", "kerosene-red");   // instant
-    remixable.SetRange("tallness", 1.12f);               // rebuild, ~120 ms
+    remixable.SetRange("tallness", 1.12f);               // rebuild
 };
 ```
 
@@ -219,9 +220,9 @@ that, and the connector ships all three because they suit different projects.
 
 | | Cost | Needs | Use when |
 | --- | --- | --- | --- |
-| **Server bake** (default) | One request, ~120 ms | Network, quota | Almost always. Nothing to install, exact results. |
-| **Vertex morph** | ~0.05 ms | Two server bakes up front | You want a slider to track the hand. Only works on topology-preserving knobs — 14 of 32 measured on the live catalogue. |
-| **Local bake** | ~41.5 ms on Quest 3 | A JS engine + ~343 KB payload | Offline, or you're past the hourly quota. |
+| **Local bake** (default in the editor) | ~20-140 ms | Nothing — the engine ships with the package | Editing. It spends no allowance and needs no network once the module is fetched. |
+| **Vertex morph** | ~0.05 ms | Two bakes up front, measured once per knob | A slider that tracks the hand. Only knobs that preserve topology qualify, and that has to be measured rather than assumed. |
+| **Server bake** | One request, ~120 ms | Network, quota | Player builds, rigged assets, and anything the local module cannot build. |
 
 Morphing is the one most projects overlook:
 
@@ -289,11 +290,11 @@ cannot fetch, which are the ones you could not import anyway.
 
 Two things worth knowing:
 
-**It is editor-only, by construction.** The engine binding declares
-`includePlatforms: ["Editor"]` and the ~336 KB three.js bundle lives under `Editor/`, so
-neither can reach a player build. A shipped game always uses the server baker. This is the
-reason local baking used to be an opt-in sample: the scripts sat in a `Resources` folder,
-and Unity copies `Resources` into every build whether anything references it or not.
+**It is editor-only, by construction.** The engine assembly declares
+`includePlatforms: ["Editor"]`, every native library is marked Editor-only, and the 734 KB
+three.js runtime lives under `Editor/` rather than in a `Resources` folder — Unity copies
+`Resources` into every build whether anything references it or not. So none of it reaches a
+player, and a shipped game always uses the server baker.
 
 **It only covers assets whose module you can fetch** — every free asset, and paid ones once
 you own them. Locked assets still preview from their public GLB and still remix on the
