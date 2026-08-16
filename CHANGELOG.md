@@ -5,6 +5,24 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.4] - 2026-08-16
+
+### Fixed
+
+Three things the Asset Store's UPM validator rejected, none of which the `.unitypackage`
+validator ever looks at:
+
+- **`unityRelease` is mandatory** in a submitted manifest. `"unity": "6000.0"` alone is not
+  enough; it is now `"unityRelease": "0f1"`, which states 6000.0.0f1 or newer, the same claim
+  the README and the listing already make.
+
+- **`author.name` must be the publisher account**, not the product. It said Polyfork and the
+  account is Present Futures, so the uploader refused the package outright.
+
+- **`Samples~/RuntimeApi` had no meta files.** Unity ignores `~` folders, so nothing ever
+  generated them, and the validator asks for them anyway: a sample is copied into `Assets/`
+  when imported, and without metas every file arrives with a fresh GUID.
+
 ## [0.18.3] - 2026-08-16
 
 ### Changed
