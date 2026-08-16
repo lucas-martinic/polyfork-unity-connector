@@ -5,6 +5,15 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.3] - 2026-08-16
+
+### Changed
+
+- Documentation only, cut so the submission build carries it. The README described local baking
+  as something you install: the Setup menu item said it installed a JS engine, the bake-path
+  table led with the server as the default, and it pointed at a Local Baking sample that no
+  longer exists. All three stopped being true when the engine was vendored.
+
 ## [0.18.2] - 2026-08-14
 
 ### Fixed
