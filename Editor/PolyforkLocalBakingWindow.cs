@@ -30,7 +30,7 @@ namespace Polyfork.EditorTools
             "com.tencent.puerts.quickjs",
         };
 
-        [MenuItem("Polyfork/Setup", priority = 3)]
+        [MenuItem("Tools/Polyfork/Setup", priority = 3)]
         public static void Open()
         {
             var window = GetWindow<PolyforkLocalBakingWindow>(true, "Polyfork Setup");
@@ -49,14 +49,27 @@ namespace Polyfork.EditorTools
         /// The old packages, detected by assembly rather than by reading the project's package
         /// lock. Same answer, and it asks the question we actually care about - is a second
         /// copy of Puerts loaded - rather than what a file on disk says about it.
+        ///
+        /// Empty unless we carry an engine of our own, because the conflict is two copies and
+        /// not one. The Asset Store build ships without the engine, so PuerTS in that project
+        /// is the user's own business and telling them to remove it would be wrong.
         /// </summary>
         static string[] LegacyPackagesPresent() =>
+            !OwnEnginePresent
+                ? Array.Empty<string>()
+                : AppDomain.CurrentDomain.GetAssemblies()
+                    .Select(a => a.GetName().Name)
+                    .Where(n => LegacyAssemblies.Contains(n))
+                    .Distinct()
+                    .OrderBy(n => n)
+                    .ToArray();
+
+        /* By assembly, not by IsAvailable: a clash stops the engine from loading, so the state
+         * this has to recognise is "ours is here and did not start", which IsAvailable reads
+         * as absent. */
+        static bool OwnEnginePresent =>
             AppDomain.CurrentDomain.GetAssemblies()
-                .Select(a => a.GetName().Name)
-                .Where(n => LegacyAssemblies.Contains(n))
-                .Distinct()
-                .OrderBy(n => n)
-                .ToArray();
+                .Any(a => a.GetName().Name == "Polyfork.Puerts");
 
         Vector2 _scroll;
 
@@ -85,27 +98,35 @@ namespace Polyfork.EditorTools
             EditorGUILayout.Space(6f);
             EditorGUILayout.LabelField("There is nothing to set up.", EditorStyles.wordWrappedLabel);
             EditorGUILayout.LabelField(
-                "The engine ships inside this package, so drag a slider in the remix screen and "
-                + "the geometry rebuilds as you drag rather than when you let go.",
+                "Drag a slider in the remix screen and the geometry rebuilds as you drag, rather "
+                + "than when you let go.",
                 EditorStyles.wordWrappedLabel);
 
             EditorGUILayout.Space(10f);
             if (GUILayout.Button("Run a smoke test", GUILayout.Height(26f)))
-                EditorApplication.ExecuteMenuItem("Polyfork/Diagnostics/Smoke-test local baking");
+                EditorApplication.ExecuteMenuItem("Tools/Polyfork/Diagnostics/Smoke-test local baking");
         }
 
         void DrawNotRunning()
         {
             EditorGUILayout.HelpBox(
-                "Local baking is not running. Models will still rebuild, on the server: roughly "
-                + "120 ms per change, and each one spends part of your hourly allowance.",
-                MessageType.Warning);
+                "Models rebuild on polyfork.dev: roughly 120 ms per change, and each one spends "
+                + "part of your hourly allowance.",
+                MessageType.Info);
 
             EditorGUILayout.Space(6f);
-            EditorGUILayout.LabelField("What to check", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("Rebuilding in the editor instead", EditorStyles.boldLabel);
 
-            Bullet("The engine is editor-only and desktop-only: Windows, macOS and Linux on "
-                   + "x64, plus Apple Silicon. It does not run in a player build, by design.");
+            /* Deliberately does not claim the engine is present. It ships in the GitHub build
+             * and NOT in the Asset Store one, because three.js and PuerTS both require their
+             * notice to travel with them and the store does not accept a package carrying an
+             * attribution licence. One wording has to be true in both. */
+            Bullet("An optional JavaScript engine runs each model's own program in the editor, "
+                   + "so a slider costs a few milliseconds and no request. It is in the GitHub "
+                   + "build at github.com/lucas-martinic/polyfork-unity-connector.");
+            Bullet("It is editor-only and desktop-only: Windows, macOS and Linux on x64, plus "
+                   + "Apple Silicon. It never reaches a player build, so a shipped game rebuilds "
+                   + "through the API either way.");
             Bullet("Open the Console. The engine reports the step it failed on by name, so the "
                    + "message says which part broke rather than only that something did.");
             Bullet("A smoke test bakes one model and prints timings. It is the quickest way to "
@@ -113,7 +134,7 @@ namespace Polyfork.EditorTools
 
             EditorGUILayout.Space(10f);
             if (GUILayout.Button("Run a smoke test", GUILayout.Height(26f)))
-                EditorApplication.ExecuteMenuItem("Polyfork/Diagnostics/Smoke-test local baking");
+                EditorApplication.ExecuteMenuItem("Tools/Polyfork/Diagnostics/Smoke-test local baking");
         }
 
         void DrawLegacyConflict(string[] legacy)
@@ -148,8 +169,7 @@ namespace Polyfork.EditorTools
             EditorGUILayout.LabelField(
                 "Local baking is an editor convenience. The engine and its scripts declare "
                 + "Editor-only, so neither reaches a player build and a shipped game keeps using "
-                + "the server. Polyfork bundles PuerTS (Tencent, BSD 3-Clause); the notice is in "
-                + "Third Party Notices.md.",
+                + "the server.",
                 style);
         }
 

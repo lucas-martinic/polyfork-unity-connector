@@ -20,7 +20,7 @@ namespace Polyfork.EditorTools
         const float CardSize = 118f;
         const float CardPadding = 8f;
 
-        [MenuItem("Polyfork/Browse Assets %#p", priority = 0)]
+        [MenuItem("Tools/Polyfork/Browse Assets %#p", priority = 0)]
         // Also under Window, because that is where Unity users look for a window.
         [MenuItem("Window/Polyfork/Browse Assets", priority = 1100)]
         public static void Open()
@@ -1621,7 +1621,7 @@ namespace Polyfork.EditorTools
             {
                 EditorGUILayout.HelpBox(
                     $"{_selected.Title} is {_selected.AccessLabel()}. Remix and preview it as much as " +
-                    "you like; importing needs a licence.",
+                    "you like; importing it needs a Polyfork Pro plan.",
                     MessageType.None);
 
                 using (new EditorGUILayout.HorizontalScope())

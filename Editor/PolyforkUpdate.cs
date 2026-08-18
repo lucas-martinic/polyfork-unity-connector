@@ -33,7 +33,7 @@ namespace Polyfork.EditorTools
 
         static AddRequest _request;
 
-        [MenuItem("Polyfork/Update Package", priority = 4)]
+        [MenuItem("Tools/Polyfork/Update Package", priority = 4)]
         static void Update() => _ = UpdateAsync();
 
         /// <summary>The version currently in the project, or null.</summary>

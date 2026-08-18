@@ -57,7 +57,7 @@ namespace Polyfork.EditorTools
                 EditorStyles.wordWrappedMiniLabel);
         }
 
-        [MenuItem("Polyfork/API Key…", priority = 1)]
+        [MenuItem("Tools/Polyfork/API Key…", priority = 1)]
         [MenuItem("Window/Polyfork/API Key…", priority = 1101)]
         public static PolyforkApiKeyWindow Open()
         {

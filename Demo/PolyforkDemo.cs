@@ -19,7 +19,7 @@ namespace Polyfork.Demo
     public sealed class PolyforkDemo : MonoBehaviour
     {
         [TextArea(2, 4)]
-        public string step1 = "Open the gallery: Polyfork > Browse Assets, or press the button below.";
+        public string step1 = "Open the gallery: Tools > Polyfork > Browse Assets, or press the button below.";
 
         [TextArea(2, 4)]
         public string step2 = "Pick any model. Free ones need no account — no sign-in, no key.";
@@ -33,8 +33,9 @@ namespace Polyfork.Demo
 
         [Space]
         [TextArea(2, 5)]
-        public string note = "Optional: Polyfork > Setup adds a JavaScript engine so models rebuild "
-                             + "inside the editor instead of on the server — instant, and it spends "
-                             + "no allowance. Editor-only; it never reaches a player build.";
+        public string note = "Models rebuild on polyfork.dev, which takes about 120 ms and spends "
+                             + "part of an hourly allowance. Tools > Polyfork > Setup says whether "
+                             + "this project can rebuild them in the editor instead, which is "
+                             + "instant and free. Either way, nothing about it reaches a build.";
     }
 }

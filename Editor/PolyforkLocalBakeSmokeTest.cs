@@ -20,22 +20,21 @@ namespace Polyfork.EditorTools
     {
         const string FreeAssetId = "street-lamp-29f365";
 
-        [MenuItem("Polyfork/Diagnostics/Smoke-test local baking", priority = 100)]
+        [MenuItem("Tools/Polyfork/Diagnostics/Smoke-test local baking", priority = 100)]
         public static void Run() => _ = RunAsync();
 
         /// <summary>Greyed out unless a JS engine is actually installed, so the menu does not
         /// offer to test something this project cannot do.</summary>
-        [MenuItem("Polyfork/Diagnostics/Smoke-test local baking", validate = true)]
+        [MenuItem("Tools/Polyfork/Diagnostics/Smoke-test local baking", validate = true)]
         static bool CanRun() => PolyforkJsRuntimeProvider.IsAvailable;
 
         public static async Task RunAsync()
         {
             if (!PolyforkJsRuntimeProvider.IsAvailable)
             {
-                Debug.LogWarning("[Polyfork] the JS engine did not register, so local baking is " +
-                                 "unavailable and rebuilds will go to the server. The engine ships " +
-                                 "with this package and is editor-only and desktop-only; open " +
-                                 "Polyfork ▸ Setup for what to check.");
+                Debug.LogWarning("[Polyfork] no JS engine is registered, so rebuilds go to the " +
+                                 "server. Open Tools ▸ Polyfork ▸ Setup for what that means and " +
+                                 "where the optional engine lives.");
                 return;
             }
 

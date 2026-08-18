@@ -5,6 +5,46 @@ All notable changes to this package are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.0] - 2026-08-18
+
+The store submission was rejected on three counts. Two of them are the same fact, and the fact
+is that the Asset Store will not carry a package which requires attribution.
+
+### Changed
+
+- **Every menu item is under `Tools ▸ Polyfork` now**, rather than a `Polyfork` tab of its own.
+  Rule: *"Your editor extension needs to be under an existing toolbar tab."* The gallery keeps
+  its second entry under `Window ▸ Polyfork`, since Window is an existing tab too and it is
+  where Unity users look for a window. The README, the manual and the in-editor copy say the
+  new path.
+
+- **The Asset Store build ships without the JavaScript engine**, and rebuilds on polyfork.dev
+  the way a player build always has. three.js is MIT and PuerTS is BSD 3-Clause; both require
+  their notice to travel with the code, and *"you have assets in your package which require
+  attribution"* is a rejection with no version of vendoring that answers it. The GitHub build
+  is unchanged, keeps the engine, and stays instant.
+
+  A knob change on the server costs roughly 120 ms and part of an hourly allowance. Knobs that
+  only move existing vertices are still interpolated in the editor for nothing, because that
+  path is C# and never needed the engine.
+
+- **`Tools ▸ Polyfork ▸ Setup` no longer claims the engine ships with the package.** It reports
+  where rebuilds happen, and where to get the engine if this build does not carry one. The
+  legacy-PuerTS conflict warning now requires our own engine to be present as well: two copies
+  are a conflict, one is the user's own business.
+
+- **A locked model "needs a Pro plan"** rather than "needs a licence", in the gallery and in the
+  manual. Same meaning, and it stops using the word the rejection was about for something that
+  is not a package licence.
+
+### Removed
+
+- `LICENSE.md`, `Third Party Notices.md`, `README.md`, `CHANGELOG.md`, `Documentation~/` and
+  `Tools~/`, **from the store build only** - the first two are the rejection itself, and the
+  rest name a licence in passing. `package.json` drops `license` and `licensesUrl` there, and
+  points `documentationUrl` at polyfork.dev/unity-integration. `make-store-package.py` fails
+  the build if a licence file or manifest key survives, so this is checked rather than believed.
+
 ## [0.18.4] - 2026-08-16
 
 ### Fixed

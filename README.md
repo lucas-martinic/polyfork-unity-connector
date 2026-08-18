@@ -15,15 +15,12 @@ The [Polyfork](https://polyfork.dev) store, inside the editor. Browse the catalo
 the same knobs the web viewer exposes, watch the model rebuild, and drop it into your
 project as a `.glb` — with your colours baked in.
 
-> **Polyfork ▸ Browse Assets** &nbsp;·&nbsp; `Ctrl/Cmd + Shift + P`
-
-Nothing here invents a parameter. Every label, range, option and palette entry is read from
-the asset's published schema at `/cdn/{id}-params.json`.
-
-## Install
-
-Unity ▸ **Window ▸ Package Manager ▸ + ▸ Add package from git URL**:
-
+> **Tools ▸ Polyfork ▸ Browse Assets                           Ctrl/Cmd + Shift + P
+Tools ▸ Polyfork ▸ API Key…
+Tools ▸ Polyfork ▸ Welcome
+Tools ▸ Polyfork ▸ Setup                                   is local baking running, and why not
+Tools ▸ Polyfork ▸ Update Package                          pull the newest version from GitHub
+Tools ▸ Polyfork ▸ Diagnostics ▸ Smoke-test local baking   bake one model, print timings
 ```
 https://github.com/lucas-martinic/polyfork-unity-connector.git
 ```
@@ -32,7 +29,7 @@ That resolves both dependencies for you, because Package Manager reads them from
 
 Or grab **`Polyfork.unitypackage`** from
 [Releases](https://github.com/lucas-martinic/polyfork-unity-connector/releases) and
-double-click it. The git URL updates in place from `Polyfork ▸ Update Package`; the
+double-click it. The git URL updates in place from `Tools ▸ Polyfork ▸ Update Package`; the
 `.unitypackage` is the one-file version for handing to somebody.
 
 > **A `.unitypackage` carries no dependency information**, so install these two first —
@@ -70,7 +67,7 @@ Unity 6000.0 or newer. The two dependencies are resolved from Unity's own regist
 >
 > The repository keeps its name, so the git URL is unchanged.
 
-A package installed from a git URL does not update on its own. **Polyfork ▸ Update Package**
+A package installed from a git URL does not update on its own. **Tools ▸ Polyfork ▸ Update Package**
 checks the published version, tells you if you are already on it, and pulls the newest one if
 not.
 
@@ -82,12 +79,12 @@ install it again, which is the same operation with more steps.
 ## Menu
 
 ```
-Polyfork ▸ Browse Assets                          Ctrl/Cmd + Shift + P
-Polyfork ▸ API Key…
-Polyfork ▸ Welcome
-Polyfork ▸ Setup                                  is local baking running, and why not
-Polyfork ▸ Update Package                         pull the newest version from GitHub
-Polyfork ▸ Diagnostics ▸ Smoke-test local baking   bake one model, print timings
+Tools ▸ Polyfork ▸ Browse Assets                          Ctrl/Cmd + Shift + P
+Tools ▸ Polyfork ▸ API Key…
+Tools ▸ Polyfork ▸ Welcome
+Tools ▸ Polyfork ▸ Setup                                  is local baking running, and why not
+Tools ▸ Polyfork ▸ Update Package                         pull the newest version from GitHub
+Tools ▸ Polyfork ▸ Diagnostics ▸ Smoke-test local baking   bake one model, print timings
 ```
 
 The gallery is also under **Window ▸ Polyfork**, where Unity users tend to look for a
@@ -265,7 +262,7 @@ slider costs CPU rather than a request.
 
 **There is nothing to install.** The engine is PuerTS on QuickJS, vendored into the package
 under `Editor/Puerts/Vendor/` (BSD 3-Clause; see `Third Party Notices.md`). Drag a slider and
-the geometry rebuilds as you drag. **Polyfork ▸ Setup** reports whether it started and what to
+the geometry rebuilds as you drag. **Tools ▸ Polyfork ▸ Setup** reports whether it started and what to
 check if it did not.
 
 It is editor-only and desktop-only: Windows, macOS (universal, so Apple Silicon included) and
@@ -286,7 +283,7 @@ cannot fetch, which are the ones you could not import anyway.
 > `com.tencent.puerts.quickjs` from your project, and delete the `PuerTS` folder beside
 > `Assets` if an older setup window left one. Unity refuses to import two native plugins with
 > the same file name, so the project will not compile while both copies are present.
-> **Polyfork ▸ Setup** detects this and says so.
+> **Tools ▸ Polyfork ▸ Setup** detects this and says so.
 
 Two things worth knowing:
 

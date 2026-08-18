@@ -81,14 +81,14 @@ catalogue that lives online, so what belongs in a demo scene is whatever <em>you
 from it. Import one and it lands in this scene — that is the demo.</div>
 
 <h2 id="s3">3. Browsing the catalogue</h2>
-<p><strong>Polyfork ▸ Browse Assets</strong>, or <code>Ctrl/Cmd + Shift + P</code>.</p>
+<p><strong>Tools ▸ Polyfork ▸ Browse Assets</strong>, or <code>Ctrl/Cmd + Shift + P</code>.</p>
 <ul>
   <li>Search by name, and filter by kit, class, free-only, remixable-only or triangle budget.</li>
   <li>Click a card to select it: the panel on the right previews the real model, orbitable by
       dragging and zoomable by scrolling.</li>
   <li>The panel lists what the model can be changed into, without changing it.</li>
   <li>Paid models you do not own are dimmed and badged <code>locked</code>. They still preview
-      and still remix; what needs a licence is writing one into your project.</li>
+      and still remix; what a Pro plan unlocks is writing one into your project.</li>
 </ul>
 
 <h2 id="s4">4. Remixing a model</h2>
@@ -141,20 +141,20 @@ this package. Drag a slider and the geometry rebuilds as you drag.</p>
 <p>It is editor-only and desktop-only: Windows, macOS (universal, so Apple Silicon is covered)
 and Linux on x64. The assembly is marked Editor-only and so is every native library, so none of
 it reaches a player build and a shipped game keeps using the server.
-<strong>Polyfork ▸ Setup</strong> reports whether the engine started and what to check if it
+<strong>Tools ▸ Polyfork ▸ Setup</strong> reports whether the engine started and what to check if it
 did not.</p>
 <div class="note">Rigged models always rebuild on the server, because the trimmed geometry
 library used locally omits the skinning classes.</div>
 <div class="note"><strong>Upgrading from 0.11 or earlier:</strong> remove
 <code>com.tencent.puerts.core</code> and <code>com.tencent.puerts.quickjs</code> from the
 project. Unity refuses to import two native plugins with the same file name, so the project
-will not compile while both copies are present. Polyfork ▸ Setup detects this and says so.</div>
+will not compile while both copies are present. Tools ▸ Polyfork ▸ Setup detects this and says so.</div>
 
 <h2 id="s9">9. Accounts, the free tier and API keys</h2>
 <p>No account is needed to browse, preview, remix or import free models — about half the
 catalogue — with no attribution and commercial use allowed.</p>
 <p>An API key raises the hourly rebuild allowance and unlocks the paid catalogue. Add it under
-<strong>Polyfork ▸ API Key…</strong>. Keys are stored in <code>EditorPrefs</code> on your
+<strong>Tools ▸ Polyfork ▸ API Key…</strong>. Keys are stored in <code>EditorPrefs</code> on your
 machine and never written into a scene or a repository. A key set through the
 <code>POLYFORK_API_KEY</code> environment variable or a <code>polyfork.key</code> file is
 picked up too, and the window says which source is in force.</p>

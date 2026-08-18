@@ -8,7 +8,7 @@ namespace Polyfork.EditorTools
 {
     /// <summary>
     /// The front door: shown once after the package is installed, and any time from
-    /// <c>Polyfork ▸ Welcome</c>.
+    /// <c>Tools ▸ Polyfork ▸ Welcome</c>.
     ///
     /// It exists because the first thing a new user needs to know is that they do not need
     /// an account. Browsing, previewing and remixing all work with no key at all. Left
@@ -50,7 +50,7 @@ namespace Polyfork.EditorTools
         string _error;
         CancellationTokenSource _cts;
 
-        [MenuItem("Polyfork/Welcome", priority = 2)]
+        [MenuItem("Tools/Polyfork/Welcome", priority = 2)]
         public static void Open()
         {
             var window = GetWindow<PolyforkWelcomeWindow>(utility: true, title: "Polyfork", focus: true);
@@ -284,7 +284,7 @@ namespace Polyfork.EditorTools
 
             EditorGUILayout.Space(4f);
             EditorGUILayout.LabelField(
-                "Polyfork ▸ Welcome brings this back.", EditorStyles.centeredGreyMiniLabel);
+                "Tools ▸ Polyfork ▸ Welcome brings this back.", EditorStyles.centeredGreyMiniLabel);
         }
     }
 }

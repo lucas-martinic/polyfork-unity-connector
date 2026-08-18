@@ -40,7 +40,7 @@ Tencent's, which closes both doors — and leaves the third: make it ours.
 | Feature | Resolution |
 | --- | --- |
 | *Install PuerTS for me* | **Gone.** The engine is vendored into the package (`Tools~/vendor-puerts.py`), so there is nothing to install and nothing to ask permission for. |
-| `Polyfork ▸ Update Package` | **Stripped from the store build.** Wrong twice over there: the store delivers its own updates, and a store install lands in `Assets/Polyfork/` where there is no package to update, so it would fetch a second copy alongside the imported files. |
+| `Tools ▸ Polyfork ▸ Update Package` | **Stripped from the store build.** Wrong twice over there: the store delivers its own updates, and a store install lands in `Assets/Polyfork/` where there is no package to update, so it would fetch a second copy alongside the imported files. |
 
 `Tools~/make-store-package.py` drops that file, cuts any region marked `// <store-strip>`,
 then *searches the result* for `Client.Add`, `Client.AddAndRemove`, `packages-lock.json` and
@@ -56,6 +56,8 @@ What is vendored is deliberately less than the whole engine: desktop x64 natives
 all marked Editor-only), managed source verbatim, and none of the Android/iOS/WebGL binaries,
 the websocket addon, or the IL2CPP generator. `Third Party Notices.md` carries the BSD 3-Clause
 notice, which is what clause 2 asks of a binary redistribution.
+
+**And that notice is why the engine does not ship to the store at all.** See 1e.
 
 ### 1b. The animation clips — **decided: keep them, ship free**
 
@@ -110,6 +112,58 @@ whichever one you had open decided the outcome. They are ordinary package folder
 **When validating, select `Assets/Polyfork` itself**, not a subfolder. Both checks only ever see
 the paths you add, so pointing them at `Runtime/` fails on a package that would otherwise pass.
 
+### 1e. Rejection of 2026-08-18: licences, attribution, and the menu tab
+
+Three reasons, verbatim:
+
+> 1. *Your product contains an independent license for your files. All packages on the Asset
+>    Store are protected by the Asset Store End User License Agreement.*
+> 2. *You have assets in your package which require attribution or cannot be resold.*
+> 3. *Your editor extension needs to be under an existing toolbar tab. You may place your
+>    editor extension under the "Tools" tab.*
+
+**(3) is a one-line fix and applies to both builds.** Every `MenuItem` moved from
+`Polyfork/…` to `Tools/Polyfork/…`, along with the `ExecuteMenuItem` calls that drive them and
+every mention of a menu path in the README, the manual and the in-editor copy. The gallery's
+second entry under `Window ▸ Polyfork` stays: Window is an existing tab, and it is where Unity
+users look for a window.
+
+**(1) and (2) are the same fact seen twice, and they cost local baking in the store build.**
+Reason 1 is our own `LICENSE.md`. Reason 2 is the vendored engine: three.js is MIT and PuerTS
+is BSD 3-Clause, and both licences require the notice to travel with the code, which *is*
+attribution. There is no version of "vendor the engine and keep the notice" that survives a
+rule against packages that require attribution, so the store build drops the engine and
+rebuilds on polyfork.dev instead, which is what the connector did before the engine existed and
+what every player build still does.
+
+`Tools~/make-store-package.py` now sheds, and then verifies it shed:
+
+| Dropped | Why |
+| --- | --- |
+| `LICENSE.md`, `Third Party Notices.md` | reason 1, and reason 2 respectively |
+| `README.md` | states MIT in its header |
+| `CHANGELOG.md` | 1,300 lines of history naming both licences; `changelogUrl` still points at GitHub |
+| `Editor/Puerts/`, `Editor/JS/`, `Editor/PolyforkEditorJsScripts.cs` | the engine, its bundle and the loader that feeds it |
+| `Documentation~/`, `Tools~/` | internal notes, listing art and build tooling; invisible to Unity but visible to a reviewer |
+| `package.json` `license`, `licensesUrl` | a manifest asserting a licence is reason 1 in structured form |
+
+It also rewrites the manual's section 8 (which described an engine that is no longer there) and
+section 12 (which named the licence), re-renders the PDF from the rewritten HTML, points
+`documentationUrl` at `polyfork.dev/unity-integration` rather than a README that opens with an
+MIT header, and then fails the build if any file's name still looks like a licence or the
+manifest still declares one.
+
+**What the buyer loses, precisely:** rebuilds go to the server, so a knob change costs about
+120 ms and part of an hourly allowance instead of being instant and free. Vertex-interpolated
+knobs still preview locally, because that path is C# and needs no engine. The GitHub build is
+unchanged, and the store build's Setup window says where to find it.
+
+**What still had to change in shared code**, because one wording has to be true in both builds:
+the Setup window no longer says the engine ships with the package, the legacy-PuerTS conflict
+warning only appears when our own engine is present (in a store build, PuerTS in the project is
+the user's own business), and the gallery says a locked model needs a Pro plan rather than a
+licence.
+
 ### 1c. Free on GitHub — **settled: the package is free**
 
 MIT and public, and the store listing is free too, so there is no gap between what a buyer
@@ -154,7 +208,7 @@ import it with your colours baked in. One draw call per model.
 Polyfork puts a 3D asset catalogue inside the Unity editor — and the models are programs
 rather than frozen meshes.
 
-Open Window > Polyfork > Browse Assets to search the catalogue, preview any model in an
+Open Tools > Polyfork > Browse Assets to search the catalogue, preview any model in an
 orbitable 3D view, then open it to remix: drag a slider and the geometry rebuilds, pick a
 colourway and every part recolours at once. Import writes a .glb into your project and drops
 it into the scene, with a component that keeps the knobs editable afterwards — change your
@@ -252,7 +306,7 @@ Each release carries **two** packages, and the difference is only the store's po
 
 | File | For | Contains |
 | --- | --- | --- |
-| `Polyfork.unitypackage` | everyone | everything, including `Polyfork ▸ Update Package` |
+| `Polyfork.unitypackage` | everyone | everything, including `Tools ▸ Polyfork ▸ Update Package` |
 | `Polyfork-AssetStore.unitypackage` | the submission | the same, minus that one menu item |
 
 Both carry `Demo/` and `Documentation/`, so validating either gives the same answer. Upload the

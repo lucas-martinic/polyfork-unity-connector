@@ -34,7 +34,7 @@ namespace Polyfork.Demo.EditorTools
             EditorGUILayout.Space(8f);
 
             if (GUILayout.Button("Open the Polyfork gallery", GUILayout.Height(30f)))
-                EditorApplication.ExecuteMenuItem("Polyfork/Browse Assets");
+                EditorApplication.ExecuteMenuItem("Tools/Polyfork/Browse Assets");
 
             EditorGUILayout.Space(8f);
             EditorGUILayout.HelpBox(demo.note, MessageType.None);
